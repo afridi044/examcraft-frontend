@@ -17,7 +17,7 @@ import {
   Trophy,
   Shield,
   ChevronRight,
-  Zap,
+
 } from "lucide-react";
 
 // Animated Counter Component

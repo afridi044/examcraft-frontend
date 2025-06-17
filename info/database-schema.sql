@@ -160,9 +160,7 @@ CREATE INDEX idx_user_answers_session ON user_answers(session_id);
 CREATE INDEX idx_user_answers_quiz ON user_answers(quiz_id);
 
 -- =============================================
--- Flashcards
--- =============================================
-
+-- ards
 CREATE TABLE flashcards (
     flashcard_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
