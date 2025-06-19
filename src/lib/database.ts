@@ -286,12 +286,17 @@ export const questionService = {
     limit?: number;
   }): Promise<ApiResponse<QuestionWithOptions[]>> {
     try {
-      let query = supabase.from(TABLE_NAMES.QUESTIONS).select(`
+      let query = supabase
+        .from(TABLE_NAMES.QUESTIONS)
+        .select(
+          `
           *,
           question_options(*),
-          topics(*),
-          explanations(*)
-        `);
+          topics(name),
+          explanations(content)
+        `
+        )
+        .order("created_at", { ascending: false });
 
       if (filters?.topicId) {
         query = query.eq("topic_id", filters.topicId);
@@ -306,8 +311,6 @@ export const questionService = {
         query = query.limit(filters.limit);
       }
 
-      query = query.order("created_at", { ascending: false });
-
       const { data, error } = await query;
 
       if (error) return handleError(error);
@@ -317,7 +320,7 @@ export const questionService = {
     }
   },
 
-  // Get question by ID with options
+  // Get question by ID
   async getQuestionById(
     questionId: string
   ): Promise<ApiResponse<QuestionWithOptions>> {
@@ -328,8 +331,8 @@ export const questionService = {
           `
           *,
           question_options(*),
-          topics(*),
-          explanations(*)
+          topics(name),
+          explanations(content)
         `
         )
         .eq("question_id", questionId)
@@ -370,11 +373,69 @@ export const questionService = {
 
       if (optionsError) return handleError(optionsError);
 
-      // Return complete question with options
-      return handleSuccess({
+      // Return question with options
+      const result: QuestionWithOptions = {
         ...question,
         question_options: options || [],
-      });
+      };
+
+      return handleSuccess(result);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  // Create question
+  async createQuestion(
+    input: CreateQuestionInput
+  ): Promise<ApiResponse<Question>> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAMES.QUESTIONS)
+        .insert(input)
+        .select()
+        .single();
+
+      if (error) return handleError(error);
+      return handleSuccess(data);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  // Create question option
+  async createQuestionOption(
+    input: CreateQuestionOptionInput
+  ): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAMES.QUESTION_OPTIONS)
+        .insert(input)
+        .select()
+        .single();
+
+      if (error) return handleError(error);
+      return handleSuccess(data);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  // Create explanation
+  async createExplanation(input: {
+    question_id: string;
+    content: string;
+    ai_generated: boolean;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAMES.EXPLANATIONS)
+        .insert(input)
+        .select()
+        .single();
+
+      if (error) return handleError(error);
+      return handleSuccess(data);
     } catch (error) {
       return handleError(error);
     }
@@ -690,13 +751,91 @@ export const answerService = {
     input: CreateUserAnswerInput
   ): Promise<ApiResponse<UserAnswer>> {
     try {
+      console.log("=== DATABASE SUBMIT ANSWER ===");
+      console.log("Input:", {
+        user_id: input.user_id,
+        question_id: input.question_id,
+        quiz_id: input.quiz_id,
+        is_correct: input.is_correct,
+      });
+
+      // Debug: Check what user IDs exist in user_answers table for this quiz
+      const { data: allAnswersForQuiz } = await supabase
+        .from(TABLE_NAMES.USER_ANSWERS)
+        .select("user_id, question_id, quiz_id, created_at")
+        .eq("quiz_id", input.quiz_id);
+
+      console.log(
+        "All existing answers for this quiz:",
+        allAnswersForQuiz?.length || 0
+      );
+      if (allAnswersForQuiz && allAnswersForQuiz.length > 0) {
+        const uniqueUserIds = [
+          ...new Set(allAnswersForQuiz.map((a) => a.user_id)),
+        ];
+        console.log("Unique user IDs in this quiz:", uniqueUserIds);
+        console.log("Current user ID:", input.user_id);
+        console.log(
+          "User ID matches existing?",
+          uniqueUserIds.includes(input.user_id)
+        );
+      }
+
+      // First, delete any existing answers for this user, question, and quiz combination
+      // This handles retakes by removing old answers before inserting new ones
+      const deleteQuery = supabase
+        .from(TABLE_NAMES.USER_ANSWERS)
+        .delete()
+        .eq("user_id", input.user_id)
+        .eq("question_id", input.question_id);
+
+      // Add quiz_id filter if it exists (for quiz answers)
+      if (input.quiz_id) {
+        console.log("Adding quiz_id filter:", input.quiz_id);
+        deleteQuery.eq("quiz_id", input.quiz_id);
+      } else {
+        console.log("Quiz ID is null, filtering for null quiz_id");
+        deleteQuery.is("quiz_id", null);
+      }
+
+      const { error: deleteError, count: deletedCount } = await deleteQuery;
+
+      if (deleteError) {
+        console.error("Error deleting existing answers:", deleteError);
+        // Don't fail the whole operation if delete fails - might be first attempt
+      } else {
+        console.log(`Deleted ${deletedCount || 0} existing answers for retake`);
+      }
+
+      // Debug: Check what existing answers are in the database for this user
+      const { data: existingAnswers } = await supabase
+        .from(TABLE_NAMES.USER_ANSWERS)
+        .select("answer_id, user_id, question_id, quiz_id, created_at")
+        .eq("user_id", input.user_id)
+        .eq("question_id", input.question_id);
+
+      console.log(
+        "Remaining answers after delete:",
+        existingAnswers?.length || 0
+      );
+      if (existingAnswers && existingAnswers.length > 0) {
+        console.log("Sample remaining answers:", existingAnswers.slice(0, 2));
+      }
+
+      // Insert the new answer
+      console.log("Inserting new answer...");
       const { data, error } = await supabase
         .from(TABLE_NAMES.USER_ANSWERS)
         .insert(input)
         .select()
         .single();
 
-      if (error) return handleError(error);
+      if (error) {
+        console.error("Insert error:", error);
+        return handleError(error);
+      }
+
+      console.log("Successfully inserted answer:", data?.answer_id);
       return handleSuccess(data);
     } catch (error) {
       return handleError(error);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
@@ -27,7 +27,7 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  const router = useRouter();
+  // const router = useRouter();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -119,6 +119,11 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
           {/* Total Quizzes Card */}
           <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5">
+            <Link
+              href="/dashboard/quiz-history"
+              className="absolute inset-0 rounded-xl"
+              aria-label="View Quiz History"
+            />
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
