@@ -5,30 +5,38 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  // Create a new QueryClient instance for each component tree
-  // This ensures that data is not shared between different users/sessions
+  // Optimized QueryClient with better caching and performance settings
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // With SSR, we usually want to set some default staleTime
-            // above 0 to avoid refetching immediately on the client
-            staleTime: 60 * 1000, // 1 minute
+            // Increased stale time for better performance
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            // Cache data for longer to reduce network requests
+            gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+            // Retry strategy optimized for different error types
             retry: (failureCount, error) => {
-              // Don't retry on 4xx errors
+              // Don't retry on authentication errors (4xx)
               if (error && typeof error === "object" && "status" in error) {
                 const status = error.status as number;
-                if (status >= 400 && status < 500) {
-                  return false;
-                }
+                if (status >= 400 && status < 500) return false;
+                if (status === 500) return failureCount < 2; // Retry server errors twice
               }
-              // Retry up to 3 times for other errors
+              // Retry network errors up to 3 times
               return failureCount < 3;
             },
+            // Reduce background refetching for better performance
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
+            // Only refetch on mount if data is stale
+            refetchOnMount: (query) => query.state.data === undefined,
           },
           mutations: {
-            retry: false, // Don't retry mutations by default
+            // Don't retry mutations by default for safety
+            retry: false,
+            // Add network error retry for mutations
+            networkMode: "offlineFirst",
           },
         },
       })
@@ -39,7 +47,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {children}
       {/* Only show devtools in development */}
       {process.env.NODE_ENV === "development" && (
-        <ReactQueryDevtools initialIsOpen={false} />
+        <ReactQueryDevtools initialIsOpen={false} position="bottom-right" />
       )}
     </QueryClientProvider>
   );

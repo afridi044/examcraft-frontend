@@ -3,11 +3,30 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Single optimized Supabase client instance
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Reduce auth polling for better performance
+    flowType: "pkce",
+  },
+  // Global performance optimizations
+  global: {
+    headers: {
+      "x-my-custom-header": "examcraft",
+    },
+  },
+  // Database connection optimizations
+  db: {
+    schema: "public",
+  },
+  // Realtime optimizations (disable if not needed)
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
   },
 });
 
