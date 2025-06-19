@@ -1,8 +1,8 @@
 // Database Service Layer for ExamCraft
 // Provides type-safe CRUD operations for all database entities
 
+import { createClient } from "@supabase/supabase-js";
 import { TABLE_NAMES } from "@/types/database";
-import { supabase } from "@/lib/supabase"; // Use centralized client
 import type {
   User,
   Topic,
@@ -39,6 +39,11 @@ import type {
   ApiResponse,
 } from "@/types/database";
 
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
 // =============================================
 // Helper Functions
 // =============================================
@@ -67,7 +72,7 @@ function handleSuccess<T>(data: T): ApiResponse<T> {
 // =============================================
 
 export const userService = {
-  // Get current user from auth with caching optimization
+  // Get current user from auth
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
       const { data: authData, error: authError } =

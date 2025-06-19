@@ -40,12 +40,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) {
       console.log("Dashboard - Supabase Auth User ID:", user.id);
-     // console.log("Dashboard - Supabase Auth User Email:", user.email);
+      // console.log("Dashboard - Supabase Auth User Email:", user.email);
     }
 
     if (currentUser) {
       //console.log("Dashboard - Database User:", currentUser);
-     console.log("Dashboard - Database User ID:", currentUser.user_id);
+      console.log("Dashboard - Database User ID:", currentUser.user_id);
     }
   }, [user, currentUser]);
 
@@ -103,7 +103,9 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Dashboard
             </h2>
-            <p className="text-gray-400">Preparing your learning experience...</p>
+            <p className="text-gray-400">
+              Preparing your learning experience...
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -230,7 +232,9 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">Keep it up!</span>
+                <span className="text-emerald-400 font-medium">
+                  Keep it up!
+                </span>
               </div>
             </div>
           </div>
@@ -268,7 +272,9 @@ export default function DashboardPage() {
                   <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
                     <Clock className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-lg font-bold text-white">Recent Activity</h2>
+                  <h2 className="text-lg font-bold text-white">
+                    Recent Activity
+                  </h2>
                 </div>
                 {recentActivity && recentActivity.length > 3 && (
                   <Button
@@ -336,7 +342,9 @@ export default function DashboardPage() {
                   <div className="h-12 w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
                     <BookOpen className="h-6 w-6 text-gray-500" />
                   </div>
-                  <p className="font-medium text-gray-300 mb-1">No recent activity</p>
+                  <p className="font-medium text-gray-300 mb-1">
+                    No recent activity
+                  </p>
                   <p className="text-sm text-gray-400">
                     Start taking quizzes to see your activity here
                   </p>
@@ -353,7 +361,9 @@ export default function DashboardPage() {
                   <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
                     <BarChart3 className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-lg font-bold text-white">Topic Progress</h2>
+                  <h2 className="text-lg font-bold text-white">
+                    Topic Progress
+                  </h2>
                 </div>
                 {topicProgress && topicProgress.length > 3 && (
                   <Button
@@ -424,7 +434,9 @@ export default function DashboardPage() {
                   <div className="h-12 w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
                     <Target className="h-6 w-6 text-gray-500" />
                   </div>
-                  <p className="font-medium text-gray-300 mb-1">No progress data</p>
+                  <p className="font-medium text-gray-300 mb-1">
+                    No progress data
+                  </p>
                   <p className="text-sm text-gray-400">
                     Answer questions to track your progress by topic
                   </p>
