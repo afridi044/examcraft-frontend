@@ -94,7 +94,6 @@ export default function QuizReviewPage() {
       }
 
       const data: ReviewData = await response.json();
-      console.log("Review data received:", data);
       setReviewData(data);
     } catch (err) {
       console.error("Error fetching review data:", err);
@@ -167,7 +166,7 @@ export default function QuizReviewPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto p-6 space-y-8">
+      <div className="max-w-6xl mx-auto p-20 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">

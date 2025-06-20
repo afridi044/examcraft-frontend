@@ -180,7 +180,7 @@ async function generateQuestionsWithAI(
           "X-Title": "ExamCraft - AI Quiz Generator",
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-3.1-8b-instruct:free", // Free model
+          model: "deepseek/deepseek-r1-0528-qwen3-8b:free", // Free model
           messages: [
             {
               role: "system",

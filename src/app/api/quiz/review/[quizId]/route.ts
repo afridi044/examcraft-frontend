@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/database";
+import { db, supabase } from "@/lib/database";
 
 interface ReviewData {
   quiz: {
@@ -47,8 +47,6 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
-    console.log("Quiz Review API - QuizId:", params.quizId, "UserId:", userId);
-
     if (!userId) {
       return NextResponse.json(
         { error: "User ID is required" },
@@ -59,29 +57,18 @@ export async function GET(
     const quizId = params.quizId;
 
     // Get quiz with questions and explanations
-    console.log("Fetching quiz with questions...");
     const quizResponse = await db.quizzes.getQuizWithQuestions(quizId);
-    console.log("Quiz response:", quizResponse.success, quizResponse.error);
 
     if (!quizResponse.success || !quizResponse.data) {
-      console.log("Quiz not found or error:", quizResponse.error);
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
     const quiz = quizResponse.data;
 
     // Get user answers for this quiz
-    console.log("Fetching user answers...");
     const answersResponse = await db.answers.getUserAnswers(userId, {
       quizId: quizId,
     });
-    console.log(
-      "Answers response:",
-      answersResponse.success,
-      answersResponse.error,
-      "Count:",
-      answersResponse.data?.length
-    );
 
     const userAnswers = answersResponse.success
       ? answersResponse.data || []
@@ -98,18 +85,44 @@ export async function GET(
       });
     });
 
+    // Get explanations separately (since nested query isn't working)
+    const questionIds = quiz.quiz_questions.map(
+      (qq) => qq.questions.question_id
+    );
+    const { data: explanations, error: explanationsError } = await supabase
+      .from("explanations")
+      .select("*")
+      .in("question_id", questionIds);
+
+    if (explanationsError) {
+      console.error("Error fetching explanations:", explanationsError);
+    }
+
+    // Create explanation map
+    const explanationMap = new Map();
+    (explanations || []).forEach((explanation) => {
+      explanationMap.set(explanation.question_id, explanation);
+    });
+
     // Build review data
     const questions = quiz.quiz_questions
       .sort((a, b) => a.question_order - b.question_order)
       .map((quizQuestion) => {
         const question = quizQuestion.questions;
+        const explanation = explanationMap.get(question.question_id);
+
         return {
           question_id: question.question_id,
           content: question.content,
           question_type: question.question_type,
           difficulty: question.difficulty,
           question_options: question.question_options || [],
-          explanation: question.explanations?.[0] || null,
+          explanation: explanation
+            ? {
+                content: explanation.content,
+                ai_generated: explanation.ai_generated,
+              }
+            : null,
           user_answer: userAnswerMap.get(question.question_id) || null,
         };
       });
