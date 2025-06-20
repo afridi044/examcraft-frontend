@@ -8,7 +8,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-import { useTopics, useCurrentUser } from "@/hooks/useDatabase";
+import {
+  useTopics,
+  useCurrentUser,
+  useInvalidateUserData,
+} from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
 import {
   Brain,
@@ -39,8 +43,14 @@ export default function CreateQuizPage() {
   const { user } = useAuth();
   const { data: currentUser } = useCurrentUser();
   const { data: topics } = useTopics();
+  const invalidateUserData = useInvalidateUserData();
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedQuiz, setGeneratedQuiz] = useState<{
+    quiz_id: string;
+    title: string;
+    num_questions: number;
+  } | null>(null);
   const [form, setForm] = useState<QuizGenerationForm>({
     title: "",
     description: "",
@@ -108,7 +118,11 @@ export default function CreateQuizPage() {
       }
 
       toast.success("Quiz generated successfully!");
-      router.push(`/quiz/take/${result.quiz.quiz_id}`);
+      setGeneratedQuiz({
+        quiz_id: result.quiz.quiz_id,
+        title: result.quiz.title,
+        num_questions: form.num_questions,
+      });
     } catch (error) {
       console.error("Quiz generation error:", error);
       toast.error(
@@ -118,6 +132,109 @@ export default function CreateQuizPage() {
       setIsGenerating(false);
     }
   };
+
+  // Show success screen if quiz was generated
+  if (generatedQuiz) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto p-20 space-y-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center space-y-8"
+          >
+            {/* Success Header */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-center space-x-3">
+                <div className="h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
+                  <Sparkles className="h-8 w-8 text-white" />
+                </div>
+              </div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                Quiz Generated Successfully!
+              </h1>
+              <p className="text-gray-400 max-w-2xl mx-auto">
+                Your AI-powered quiz has been created and is ready to take.
+              </p>
+            </div>
+
+            {/* Quiz Details Card */}
+            <Card className="bg-gray-800/50 border-gray-700/50 p-8 max-w-2xl mx-auto">
+              <div className="space-y-6">
+                <div className="text-center space-y-3">
+                  <h2 className="text-2xl font-bold text-white">
+                    {generatedQuiz.title}
+                  </h2>
+                  <div className="flex items-center justify-center space-x-6 text-gray-400">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4" />
+                      <span>{generatedQuiz.num_questions} Questions</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        ~{Math.ceil(generatedQuiz.num_questions * 1.5)} min
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-4">
+                  <Button
+                    onClick={() =>
+                      router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
+                    }
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-3 text-lg"
+                  >
+                    <Zap className="h-5 w-5 mr-2" />
+                    Start Quiz Now
+                  </Button>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      onClick={() => {
+                        if (currentUser?.user_id) {
+                          invalidateUserData(currentUser.user_id);
+                        }
+                        router.push("/dashboard");
+                      }}
+                      variant="outline"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Return to Dashboard
+                    </Button>
+
+                    <Button
+                      onClick={() => {
+                        setGeneratedQuiz(null);
+                        setForm({
+                          title: "",
+                          description: "",
+                          topic_id: "",
+                          custom_topic: "",
+                          difficulty: 3,
+                          num_questions: 10,
+                          content_source: "",
+                          additional_instructions: "",
+                        });
+                      }}
+                      variant="outline"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Create Another Quiz
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

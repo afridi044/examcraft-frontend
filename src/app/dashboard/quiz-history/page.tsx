@@ -19,13 +19,23 @@ import {
   ChevronUp,
   CheckCircle,
   XCircle,
+  Play,
+  Pause,
+  CircleDot,
+  AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { useQuery } from "@tanstack/react-query";
-import { useCurrentUser } from "@/hooks/useDatabase";
+import {
+  useCurrentUser,
+  useDeleteQuiz,
+  useInvalidateUserData,
+} from "@/hooks/useDatabase";
+import { toast } from "react-hot-toast";
 
 interface QuizAttempt {
   quiz_id: string;
@@ -44,6 +54,8 @@ interface QuizAttempt {
 
 export default function QuizHistoryPage() {
   const { data: currentUser } = useCurrentUser();
+  const deleteQuizMutation = useDeleteQuiz();
+  const invalidateUserData = useInvalidateUserData();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "score" | "title">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -51,6 +63,7 @@ export default function QuizHistoryPage() {
     "all" | "completed" | "incomplete" | "not_attempted" | "passed" | "failed"
   >("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
 
   // Fetch user's quiz attempts with scores
   const {
@@ -266,19 +279,50 @@ export default function QuizHistoryPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
-        return <CheckCircle className="h-4 w-4" />;
+        return <CheckCircle className="h-4 w-4 text-green-400" />;
       case "incomplete":
-        return <Clock className="h-4 w-4" />;
+        return <Pause className="h-4 w-4 text-yellow-400" />;
       case "not_attempted":
-        return <Target className="h-4 w-4" />;
+        return <CircleDot className="h-4 w-4 text-blue-400" />;
       case "empty":
-        return <XCircle className="h-4 w-4" />;
+        return <AlertCircle className="h-4 w-4 text-gray-400" />;
       default:
-        return <Target className="h-4 w-4" />;
+        return <CircleDot className="h-4 w-4 text-gray-400" />;
+    }
+  };
+
+  const handleDeleteQuiz = async (quizId: string, title: string) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${title}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingQuizId(quizId);
+    try {
+      const result = await deleteQuizMutation.mutateAsync(quizId);
+      if (result.success) {
+        toast.success("Quiz deleted successfully!");
+        // Invalidate all user data to refresh the dashboard
+        if (currentUser?.user_id) {
+          invalidateUserData(currentUser.user_id);
+        }
+      } else {
+        toast.error("Failed to delete quiz");
+      }
+    } catch (error) {
+      console.error("Delete quiz error:", error);
+      toast.error("Failed to delete quiz");
+    } finally {
+      setDeletingQuizId(null);
     }
   };
 
   const getActionButton = (attempt: QuizAttempt) => {
+    const isDeleting = deletingQuizId === attempt.quiz_id;
+
     switch (attempt.status) {
       case "completed":
         return (
@@ -297,42 +341,103 @@ export default function QuizHistoryPage() {
                 size="sm"
                 className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border-green-500/30"
               >
+                <Play className="h-3 w-3 mr-1" />
                 Retake
               </Button>
             </Link>
+            <Button
+              size="sm"
+              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+              disabled={isDeleting}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+              ) : (
+                <Trash2 className="h-3 w-3 mr-1" />
+              )}
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
           </div>
         );
       case "incomplete":
         return (
-          <Link href={`/quiz/take/${attempt.quiz_id}`}>
+          <div className="flex space-x-2">
+            <Link href={`/quiz/take/${attempt.quiz_id}`}>
+              <Button
+                size="sm"
+                className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30"
+              >
+                <Play className="h-3 w-3 mr-1" />
+                Continue Quiz
+              </Button>
+            </Link>
             <Button
               size="sm"
-              className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30"
+              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+              disabled={isDeleting}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
             >
-              Continue Quiz
+              {isDeleting ? (
+                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+              ) : (
+                <Trash2 className="h-3 w-3 mr-1" />
+              )}
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
-          </Link>
+          </div>
         );
       case "not_attempted":
         return (
-          <Link href={`/quiz/take/${attempt.quiz_id}`}>
+          <div className="flex space-x-2">
+            <Link href={`/quiz/take/${attempt.quiz_id}`}>
+              <Button
+                size="sm"
+                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30"
+              >
+                <Play className="h-3 w-3 mr-1" />
+                Start Quiz
+              </Button>
+            </Link>
             <Button
               size="sm"
-              className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30"
+              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+              disabled={isDeleting}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
             >
-              Start Quiz
+              {isDeleting ? (
+                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+              ) : (
+                <Trash2 className="h-3 w-3 mr-1" />
+              )}
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
-          </Link>
+          </div>
         );
       case "empty":
         return (
-          <Button
-            size="sm"
-            disabled
-            className="bg-gray-500/20 text-gray-400 border-gray-500/30 cursor-not-allowed"
-          >
-            No Questions
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              size="sm"
+              disabled
+              className="bg-gray-500/20 text-gray-400 border-gray-500/30 cursor-not-allowed"
+            >
+              No Questions
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+              disabled={isDeleting}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+              ) : (
+                <Trash2 className="h-3 w-3 mr-1" />
+              )}
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
         );
       default:
         return null;
@@ -630,10 +735,10 @@ export default function QuizHistoryPage() {
 
                           {/* Status Badge */}
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(attempt.status)}`}
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(attempt.status)}`}
                           >
                             {getStatusIcon(attempt.status)}
-                            <span className="ml-1 capitalize">
+                            <span className="ml-1.5 capitalize">
                               {attempt.status.replace("_", " ")}
                             </span>
                           </span>

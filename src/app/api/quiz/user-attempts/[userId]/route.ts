@@ -105,17 +105,6 @@ export async function GET(
         answer.selected_option_id ||
         (answer.text_answer && answer.text_answer.trim() !== "");
 
-      // Debug logging for this specific quiz
-      if (answer.quiz_id === "48dc227e-fb73-427d-a5ee-ec8d6ddcecd5") {
-        console.log("Validating answer for quiz 48dc227e:", {
-          question_id: answer.question_id,
-          selected_option_id: answer.selected_option_id,
-          text_answer: answer.text_answer,
-          hasValidAnswer: hasValidAnswer,
-          created_at: answer.created_at,
-        });
-      }
-
       // Only keep the latest answer for each question (since we ordered by created_at desc)
       // and only if it's a valid answer
       // Note: With the new delete-then-insert logic, there should only be one answer per question now

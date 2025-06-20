@@ -9,6 +9,7 @@ import {
   useDashboardStats,
   useRecentActivity,
   useTopicProgress,
+  useInvalidateUserData,
 } from "@/hooks/useDatabase";
 import {
   BookOpen,
@@ -35,6 +36,7 @@ export default function DashboardPage() {
 
   // Get current user profile data
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const invalidateUserData = useInvalidateUserData();
 
   // Log user information on initial load and when user or currentUser changes
   useEffect(() => {
@@ -49,6 +51,19 @@ export default function DashboardPage() {
     }
   }, [user, currentUser]);
 
+  // Refresh data when dashboard comes into focus (e.g., when navigating back from quiz creation)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (currentUser?.user_id) {
+        console.log("Dashboard: Refreshing data due to window focus");
+        invalidateUserData(currentUser.user_id);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [currentUser?.user_id, invalidateUserData]);
+
   // Get dashboard statistics (only when user is authenticated and we have the user profile)
   const { data: stats, isLoading: statsLoading } = useDashboardStats(
     currentUser?.user_id || ""
@@ -62,6 +77,17 @@ export default function DashboardPage() {
   const { data: topicProgress, isLoading: progressLoading } = useTopicProgress(
     currentUser?.user_id || ""
   );
+
+  // Log when dashboard data is refreshed
+  useEffect(() => {
+    if (stats && recentActivity && topicProgress) {
+      console.log("Dashboard: Data refreshed", {
+        totalQuizzes: stats.totalQuizzes,
+        recentActivityCount: recentActivity.length,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [stats, recentActivity, topicProgress]);
 
   // Calculate if we're still loading data
   const dataLoading =
@@ -196,7 +222,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Average Score Card */}
+          {/* Overall Score Card */}
           <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-300 hover:-translate-y-0.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -205,7 +231,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-                    Average Score
+                    Overall Score
                   </p>
                   <p className="text-2xl font-bold text-white">
                     {stats?.averageScore || 0}%

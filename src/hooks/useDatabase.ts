@@ -233,8 +233,17 @@ export function useCreateQuiz() {
     mutationFn: (data: CreateQuizInput) => db.quizzes.createQuiz(data),
     onSuccess: (response, variables) => {
       if (response.success) {
+        // Invalidate user quizzes
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.userQuizzes(variables.user_id),
+        });
+        // Invalidate dashboard stats to reflect new quiz count
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.dashboardStats(variables.user_id),
+        });
+        // Invalidate recent activity to show quiz creation
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.recentActivity(variables.user_id),
         });
       }
     },
@@ -263,7 +272,16 @@ export function useDeleteQuiz() {
     mutationFn: (quizId: string) => db.quizzes.deleteQuiz(quizId),
     onSuccess: (response) => {
       if (response.success) {
+        // Invalidate all quiz-related queries
         queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+        queryClient.invalidateQueries({ queryKey: ["quiz-attempts"] });
+        // Invalidate dashboard stats and activity for all users (we don't have userId here)
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === "dashboardStats" ||
+            query.queryKey[0] === "recentActivity" ||
+            query.queryKey[0] === "topicProgress",
+        });
       }
     },
   });
@@ -445,8 +463,9 @@ export function useDashboardStats(userId: string) {
     queryFn: () => db.analytics.getDashboardStats(userId),
     select: (response) => response.data,
     enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    // Remove refetchInterval to prevent unnecessary refetches
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 }
 
@@ -456,7 +475,9 @@ export function useRecentActivity(userId: string, limit: number = 10) {
     queryFn: () => db.analytics.getRecentActivity(userId, limit),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 }
 
