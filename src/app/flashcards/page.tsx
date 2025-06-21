@@ -2,7 +2,11 @@
 
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserFlashcards, useCurrentUser } from "@/hooks/useDatabase";
+import {
+  useUserFlashcards,
+  useCurrentUser,
+  useInvalidateUserData,
+} from "@/hooks/useDatabase";
 import {
   Loader2,
   Plus,
@@ -359,6 +363,7 @@ export default function FlashcardsPage() {
   const { user, loading } = useAuth();
   // Get current user profile data to access database user_id
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const invalidateUserData = useInvalidateUserData();
 
   // Use the database user_id instead of the Supabase auth user ID
   const {
@@ -371,6 +376,24 @@ export default function FlashcardsPage() {
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
   const router = useRouter();
+
+  // Refresh data when flashcards page loads
+  useEffect(() => {
+    if (currentUser?.user_id) {
+      console.log("Flashcards: Invalidating data on mount/navigation", {
+        userId: currentUser.user_id,
+      });
+      invalidateUserData(currentUser.user_id);
+    }
+  }, [currentUser?.user_id, invalidateUserData]);
+
+  const handleCreateFlashcard = (topicId?: string) => {
+    if (topicId) {
+      router.push(`/flashcards/create?topic_id=${topicId}`);
+    } else {
+      router.push("/flashcards/create");
+    }
+  };
 
   // OPTIMIZED: Combined topic stats and overall progress calculation
   const {
@@ -561,6 +584,7 @@ export default function FlashcardsPage() {
               </p>
             </div>
             <motion.button
+              onClick={() => handleCreateFlashcard()}
               className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity w-full sm:w-auto"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
@@ -691,6 +715,7 @@ export default function FlashcardsPage() {
                 Create your first flashcard to start learning
               </p>
               <motion.button
+                onClick={() => handleCreateFlashcard()}
                 className="px-4 sm:px-5 py-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center gap-2 mx-auto hover:opacity-90 transition-opacity"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -749,6 +774,7 @@ export default function FlashcardsPage() {
             </p>
           </div>
           <motion.button
+            onClick={() => handleCreateFlashcard(selectedTopicId || undefined)}
             className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity w-full sm:w-auto"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}

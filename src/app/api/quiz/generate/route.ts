@@ -185,7 +185,7 @@ async function generateQuestionsWithAI(
             {
               role: "system",
               content:
-                "You are an expert educational content creator. Generate quiz questions in valid JSON format only. Do not include any explanation or additional text outside the JSON.",
+                "You are an expert educational content creator. You must respond with ONLY valid JSON - no markdown, no explanations, no additional text. Start your response with { and end with }. Generate quiz questions in the exact JSON format requested.",
             },
             {
               role: "user",
@@ -194,6 +194,9 @@ async function generateQuestionsWithAI(
           ],
           temperature: 0.7,
           max_tokens: 4000,
+          // Performance optimizations
+          stream: false,
+          top_p: 0.9,
         }),
       }
     );
@@ -216,13 +219,52 @@ async function generateQuestionsWithAI(
     // Parse the JSON response
     let aiResponse: AIQuizResponse;
     try {
-      // Try to extract JSON from the response if it's wrapped in text
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      const jsonString = jsonMatch ? jsonMatch[0] : content;
-      aiResponse = JSON.parse(jsonString);
+      // Clean the content and try multiple parsing strategies
+      let cleanContent = content.trim();
+
+      // Remove markdown code blocks if present
+      cleanContent = cleanContent
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "");
+
+      // Try to extract JSON from the response
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : cleanContent;
+
+      // Additional cleaning - remove any trailing text after the JSON
+      const lastBraceIndex = jsonString.lastIndexOf("}");
+      const finalJsonString =
+        lastBraceIndex !== -1
+          ? jsonString.substring(0, lastBraceIndex + 1)
+          : jsonString;
+
+      console.log(
+        "Attempting to parse JSON:",
+        finalJsonString.substring(0, 200) + "..."
+      );
+      aiResponse = JSON.parse(finalJsonString);
     } catch (parseError) {
-      console.error("Failed to parse AI response:", content);
-      throw new Error("Failed to parse AI response as JSON");
+      console.error("Failed to parse AI response:", {
+        originalContent: content,
+        parseError:
+          parseError instanceof Error ? parseError.message : parseError,
+      });
+
+      // Try one more time with a simpler extraction
+      try {
+        const simpleMatch = content.match(
+          /\{[^{}]*"questions"[^{}]*\[[\s\S]*\][^{}]*\}/
+        );
+        if (simpleMatch) {
+          aiResponse = JSON.parse(simpleMatch[0]);
+        } else {
+          throw new Error("No valid JSON structure found in AI response");
+        }
+      } catch {
+        throw new Error(
+          `Failed to parse AI response as JSON. Content preview: ${content.substring(0, 500)}`
+        );
+      }
     }
 
     if (!aiResponse.questions || !Array.isArray(aiResponse.questions)) {

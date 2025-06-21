@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, lazy, Suspense } from "react";
+import { Toaster } from "react-hot-toast";
 
 // Dynamically import devtools only in development
 const ReactQueryDevtools = lazy(() =>
@@ -45,6 +46,29 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1f2937",
+            color: "#f9fafb",
+            border: "1px solid #374151",
+          },
+          success: {
+            style: {
+              background: "#065f46",
+              border: "1px solid #059669",
+            },
+          },
+          error: {
+            style: {
+              background: "#7f1d1d",
+              border: "1px solid #dc2626",
+            },
+          },
+        }}
+      />
       {/* Only show devtools in development */}
       {process.env.NODE_ENV === "development" && (
         <Suspense fallback={null}>

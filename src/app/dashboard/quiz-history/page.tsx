@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -65,6 +65,16 @@ export default function QuizHistoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
 
+  // Refresh data when quiz history page loads
+  useEffect(() => {
+    if (currentUser?.user_id) {
+      console.log("Quiz History: Invalidating data on mount/navigation", {
+        userId: currentUser.user_id,
+      });
+      invalidateUserData(currentUser.user_id);
+    }
+  }, [currentUser?.user_id, invalidateUserData]);
+
   // OPTIMIZED: Fetch user's quiz attempts with cleaner error handling
   const { data: quizAttempts, isLoading: loadingAttempts } = useQuery({
     queryKey: ["quiz-attempts", currentUser?.user_id],
@@ -84,8 +94,9 @@ export default function QuizHistoryPage() {
       return response.json();
     },
     enabled: !!currentUser?.user_id,
-    staleTime: 2 * 60 * 1000, // 2 minutes cache
-    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Enable refetch when returning to page
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // OPTIMIZED: Memoized statistics and filtering calculations

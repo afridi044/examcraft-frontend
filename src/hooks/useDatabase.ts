@@ -214,6 +214,9 @@ export function useUserQuizzes(userId: string) {
     queryFn: () => db.quizzes.getUserQuizzes(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Always refetch when component mounts
   });
 }
 
@@ -468,10 +471,10 @@ export function useDashboardStats(userId: string) {
     queryFn: () => db.analytics.getDashboardStats(userId),
     select: (response) => response.data,
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time for dashboard stats
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
-    refetchOnMount: false, // Only refetch when data is stale
+    refetchOnWindowFocus: true, // Enable to refetch when returning to dashboard
+    refetchOnMount: true, // Always refetch when component mounts
     retry: 1, // Reduce retries for faster failure handling
     refetchInterval: false, // No automatic refetching
   });
@@ -483,10 +486,10 @@ export function useRecentActivity(userId: string, limit: number = 10) {
     queryFn: () => db.analytics.getRecentActivity(userId, limit),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 3 * 60 * 1000, // 3 minutes - longer stale time for activity
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
-    refetchOnMount: false, // Only refetch when data is stale
+    refetchOnWindowFocus: true, // Enable to refetch when returning to dashboard
+    refetchOnMount: true, // Always refetch when component mounts
     retry: 1, // Reduce retries for faster failure handling
     refetchInterval: false, // No automatic refetching
   });

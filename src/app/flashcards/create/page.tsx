@@ -1,69 +1,73 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useAuth } from "@/hooks/useAuth";
-import {
-  useTopics,
-  useCurrentUser,
-  useInvalidateUserData,
-} from "@/hooks/useDatabase";
-import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardStats, RecentActivity, Quiz } from "@/types/database";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
   Loader2,
   Sparkles,
   BookOpen,
-  Target,
-  Clock,
-  Users,
   FileText,
   Zap,
+  Users,
+  Layers,
+  Settings,
+  Lightbulb,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import {
+  useCurrentUser,
+  useTopics,
+  useInvalidateUserData,
+} from "@/hooks/useDatabase";
 import { toast } from "react-hot-toast";
+import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
+import type { DashboardStats, RecentActivity } from "@/types/database";
 
-interface QuizGenerationForm {
-  title: string;
-  description: string;
+interface FlashcardGenerationForm {
   topic_id: string;
   custom_topic: string;
+  topic_name: string;
+  num_flashcards: number;
   difficulty: number;
-  num_questions: number;
   content_source: string;
   additional_instructions: string;
 }
 
-export default function CreateQuizPage() {
+export default function CreateFlashcardPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const searchParams = useSearchParams();
   const { data: currentUser } = useCurrentUser();
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
   const queryClient = useQueryClient();
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedQuiz, setGeneratedQuiz] = useState<{
-    quiz_id: string;
-    title: string;
-    num_questions: number;
+  const [generatedFlashcards, setGeneratedFlashcards] = useState<{
+    topic_id: string;
+    topic_name: string;
+    generated_count: number;
   } | null>(null);
-  const [form, setForm] = useState<QuizGenerationForm>({
-    title: "",
-    description: "",
-    topic_id: "",
+
+  // Get preselected topic from URL params
+  const preselectedTopicId = searchParams.get("topic_id") || "";
+
+  const [form, setForm] = useState<FlashcardGenerationForm>({
+    topic_id: preselectedTopicId,
     custom_topic: "",
+    topic_name: "",
+    num_flashcards: 10,
     difficulty: 3,
-    num_questions: 10,
     content_source: "",
     additional_instructions: "",
   });
+
+  const [numFlashcardsInput, setNumFlashcardsInput] = useState("10");
 
   const difficultyLevels = [
     { value: 1, label: "Beginner", color: "text-green-400" },
@@ -73,58 +77,87 @@ export default function CreateQuizPage() {
     { value: 5, label: "Expert", color: "text-red-400" },
   ];
 
+  // Set initial topic name if preselected topic exists
+  useEffect(() => {
+    if (preselectedTopicId && topics && topics.length > 0) {
+      const selectedTopic = topics.find(
+        (t) => t.topic_id === preselectedTopicId
+      );
+      if (selectedTopic) {
+        setForm((prev) => ({ ...prev, topic_name: selectedTopic.name }));
+      }
+    }
+  }, [preselectedTopicId, topics]);
+
   const handleInputChange = (
-    field: keyof QuizGenerationForm,
-    value: string | number | string[]
+    field: keyof FlashcardGenerationForm,
+    value: string | number
   ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const validateForm = () => {
-    if (!form.title.trim()) {
-      toast.error("Quiz title is required");
-      return false;
-    }
-    if (!form.topic_id && !form.custom_topic.trim()) {
+    const topicName = form.topic_id
+      ? topics?.find((t) => t.topic_id === form.topic_id)?.name
+      : form.custom_topic.trim();
+
+    if (!topicName) {
       toast.error("Please select a topic or enter a custom topic");
       return false;
     }
-    if (form.num_questions < 5 || form.num_questions > 50) {
-      toast.error("Number of questions must be between 5 and 50");
+    if (form.num_flashcards < 1 || form.num_flashcards > 50) {
+      toast.error("Number of flashcards must be between 1 and 50");
       return false;
     }
     return true;
   };
 
-  const handleGenerateQuiz = async () => {
+  const handleGenerateFlashcards = async () => {
     if (!validateForm() || !currentUser) return;
 
     setIsGenerating(true);
     try {
-      const response = await fetch("/api/quiz/generate", {
+      const topicName = form.topic_id
+        ? topics?.find((t) => t.topic_id === form.topic_id)?.name
+        : form.custom_topic.trim();
+
+      const response = await fetch("/api/flashcards/generate/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
           user_id: currentUser.user_id,
-          question_types: ["multiple-choice"], // Always use MCQ only
-          topic_name: form.topic_id
-            ? topics?.find((t) => t.topic_id === form.topic_id)?.name
-            : form.custom_topic,
+          topic_id: form.topic_id || undefined,
+          custom_topic: form.custom_topic.trim() || undefined,
+          topic_name: topicName,
+          num_flashcards: form.num_flashcards,
+          difficulty: form.difficulty,
+          content_source: form.content_source.trim() || undefined,
+          additional_instructions:
+            form.additional_instructions.trim() || undefined,
         }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to generate quiz");
+        throw new Error(data.error || "Failed to generate flashcards");
       }
 
-      toast.success("Quiz generated successfully!");
+      toast.success(
+        `Successfully generated ${data.generated_count} flashcard${
+          data.generated_count !== 1 ? "s" : ""
+        }!`
+      );
+
+      if (data.errors && data.errors.length > 0) {
+        toast.error(
+          `Some flashcards failed to generate: ${data.errors.length} errors`
+        );
+      }
 
       // Immediately update cache with optimistic data for instant UI updates
       if (currentUser?.user_id) {
-        console.log("Quiz created: Updating cache optimistically", {
+        console.log("Flashcards created: Updating cache optimistically", {
           userId: currentUser.user_id,
         });
 
@@ -135,28 +168,9 @@ export default function CreateQuizPage() {
             if (oldData) {
               return {
                 ...oldData,
-                totalQuizzes: (oldData.totalQuizzes || 0) + 1,
+                totalFlashcards:
+                  (oldData.totalFlashcards || 0) + data.generated_count,
               };
-            }
-            return oldData;
-          }
-        );
-
-        // Update user quizzes list immediately
-        queryClient.setQueryData(
-          ["userQuizzes", currentUser.user_id],
-          (oldData: Quiz[] | undefined) => {
-            if (oldData) {
-              const newQuiz: Quiz = {
-                quiz_id: result.quiz.quiz_id,
-                title: result.quiz.title,
-                description: result.quiz.description,
-                topic_id: result.quiz.topic_id,
-                user_id: currentUser.user_id,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-              return [newQuiz, ...oldData];
             }
             return oldData;
           }
@@ -169,9 +183,10 @@ export default function CreateQuizPage() {
             if (oldData) {
               const newActivity: RecentActivity = {
                 id: `temp-${Date.now()}`,
-                type: "quiz",
-                title: `Created quiz: ${result.quiz.title}`,
+                type: "flashcard",
+                title: `Created ${data.generated_count} flashcards: ${data.topic_name}`,
                 completed_at: new Date().toISOString(),
+                topic: data.topic_name,
               };
               return [newActivity, ...oldData.slice(0, 9)]; // Keep only 10 items
             }
@@ -183,23 +198,23 @@ export default function CreateQuizPage() {
         invalidateUserData(currentUser.user_id);
       }
 
-      setGeneratedQuiz({
-        quiz_id: result.quiz.quiz_id,
-        title: result.quiz.title,
-        num_questions: form.num_questions,
+      setGeneratedFlashcards({
+        topic_id: data.topic_id,
+        topic_name: data.topic_name,
+        generated_count: data.generated_count,
       });
     } catch (error) {
-      console.error("Quiz generation error:", error);
+      console.error("AI flashcard generation error:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to generate quiz"
+        error instanceof Error ? error.message : "Failed to generate flashcards"
       );
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Show success screen if quiz was generated
-  if (generatedQuiz) {
+  // Show success screen if flashcards were generated
+  if (generatedFlashcards) {
     return (
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-20 space-y-8">
@@ -216,30 +231,31 @@ export default function CreateQuizPage() {
                 </div>
               </div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-                Quiz Generated Successfully!
+                Flashcards Generated Successfully!
               </h1>
               <p className="text-gray-400 max-w-2xl mx-auto">
-                Your AI-powered quiz has been created and is ready to take.
+                Your AI-powered flashcards have been created and are ready for
+                study.
               </p>
             </div>
 
-            {/* Quiz Details Card */}
+            {/* Flashcard Details Card */}
             <Card className="bg-gray-800/50 border-gray-700/50 p-8 max-w-2xl mx-auto">
               <div className="space-y-6">
                 <div className="text-center space-y-3">
                   <h2 className="text-2xl font-bold text-white">
-                    {generatedQuiz.title}
+                    {generatedFlashcards.topic_name}
                   </h2>
                   <div className="flex items-center justify-center space-x-6 text-gray-400">
                     <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4" />
-                      <span>{generatedQuiz.num_questions} Questions</span>
+                      <Layers className="h-4 w-4" />
+                      <span>
+                        {generatedFlashcards.generated_count} Flashcards
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4" />
-                      <span>
-                        ~{Math.ceil(generatedQuiz.num_questions * 1.5)} min
-                      </span>
+                      <Brain className="h-4 w-4" />
+                      <span>AI Generated</span>
                     </div>
                   </div>
                 </div>
@@ -247,13 +263,11 @@ export default function CreateQuizPage() {
                 {/* Action Buttons */}
                 <div className="space-y-4">
                   <Button
-                    onClick={() =>
-                      router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
-                    }
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-3 text-lg"
+                    onClick={() => router.push("/flashcards")}
+                    className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 text-lg"
                   >
                     <Zap className="h-5 w-5 mr-2" />
-                    Start Quiz Now
+                    Start Studying Now
                   </Button>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -273,23 +287,23 @@ export default function CreateQuizPage() {
 
                     <Button
                       onClick={() => {
-                        setGeneratedQuiz(null);
+                        setGeneratedFlashcards(null);
                         setForm({
-                          title: "",
-                          description: "",
                           topic_id: "",
                           custom_topic: "",
+                          topic_name: "",
+                          num_flashcards: 10,
                           difficulty: 3,
-                          num_questions: 10,
                           content_source: "",
                           additional_instructions: "",
                         });
+                        setNumFlashcardsInput("10");
                       }}
                       variant="outline"
                       className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
                     >
-                      <Brain className="h-4 w-4 mr-2" />
-                      Create Another Quiz
+                      <Layers className="h-4 w-4 mr-2" />
+                      Create More Flashcards
                     </Button>
                   </div>
                 </div>
@@ -311,17 +325,17 @@ export default function CreateQuizPage() {
           className="text-center space-y-4"
         >
           <div className="flex items-center justify-center space-x-3">
-            <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
-              <Brain className="h-6 w-6 text-white" />
+            <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <Layers className="h-6 w-6 text-white" />
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              AI Quiz Generator
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
+              AI Flashcard Generator
             </h1>
           </div>
           <p className="text-gray-400 max-w-2xl mx-auto">
-            Create personalized multiple-choice quizzes with AI. Provide your
-            topic and content, and our AI will generate engaging MCQ questions
-            tailored to your needs.
+            Create personalized flashcards with AI. Provide your topic and
+            content, and our AI will generate effective study materials
+            optimized for active recall.
           </p>
         </motion.div>
 
@@ -333,47 +347,15 @@ export default function CreateQuizPage() {
         >
           <Card className="bg-gray-800/50 border-gray-700/50 p-8">
             <div className="space-y-8">
-              {/* Basic Information */}
+              {/* Topic Information */}
               <div className="space-y-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                  <div className="h-8 w-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
                     <BookOpen className="h-4 w-4 text-white" />
                   </div>
                   <h2 className="text-xl font-bold text-white">
-                    Basic Information
+                    Topic Selection
                   </h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="text-gray-300">
-                      Quiz Title
-                    </Label>
-                    <Input
-                      id="title"
-                      value={form.title}
-                      onChange={(e) =>
-                        handleInputChange("title", e.target.value)
-                      }
-                      placeholder="e.g., JavaScript Fundamentals"
-                      className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description" className="text-gray-300">
-                      Description (Optional)
-                    </Label>
-                    <Input
-                      id="description"
-                      value={form.description}
-                      onChange={(e) =>
-                        handleInputChange("description", e.target.value)
-                      }
-                      placeholder="Brief description of the quiz"
-                      className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
-                    />
-                  </div>
                 </div>
 
                 {/* Topic Selection */}
@@ -387,9 +369,17 @@ export default function CreateQuizPage() {
                       <select
                         id="topic"
                         value={form.topic_id}
-                        onChange={(e) =>
-                          handleInputChange("topic_id", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const selectedTopic = topics?.find(
+                            (t) => t.topic_id === e.target.value
+                          );
+                          handleInputChange("topic_id", e.target.value);
+                          handleInputChange("custom_topic", "");
+                          handleInputChange(
+                            "topic_name",
+                            selectedTopic?.name || ""
+                          );
+                        }}
                         className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white"
                       >
                         <option value="">Choose a topic...</option>
@@ -411,25 +401,28 @@ export default function CreateQuizPage() {
                       <Input
                         id="custom_topic"
                         value={form.custom_topic}
-                        onChange={(e) =>
-                          handleInputChange("custom_topic", e.target.value)
-                        }
-                        placeholder="e.g., React Hooks"
+                        onChange={(e) => {
+                          handleInputChange("custom_topic", e.target.value);
+                          handleInputChange("topic_id", "");
+                          handleInputChange("topic_name", e.target.value);
+                        }}
+                        placeholder="e.g., Machine Learning Basics"
                         className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
+                        disabled={!!form.topic_id}
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Quiz Configuration */}
+              {/* Flashcard Configuration */}
               <div className="space-y-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                    <Target className="h-4 w-4 text-white" />
+                  <div className="h-8 w-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                    <Settings className="h-4 w-4 text-white" />
                   </div>
                   <h2 className="text-xl font-bold text-white">
-                    Quiz Configuration
+                    Flashcard Configuration
                   </h2>
                 </div>
 
@@ -446,7 +439,7 @@ export default function CreateQuizPage() {
                           }
                           className={`p-3 rounded-lg border text-center transition-all ${
                             form.difficulty === level.value
-                              ? "border-purple-500 bg-purple-500/20 text-purple-300"
+                              ? "border-blue-500 bg-blue-500/20 text-blue-300"
                               : "border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500"
                           }`}
                         >
@@ -461,23 +454,47 @@ export default function CreateQuizPage() {
                     </div>
                   </div>
 
-                  {/* Number of Questions */}
+                  {/* Number of Flashcards */}
                   <div className="space-y-2">
-                    <Label htmlFor="num_questions" className="text-gray-300">
-                      Number of Questions (5-50)
+                    <Label htmlFor="num_flashcards" className="text-gray-300">
+                      Number of Flashcards (1-50)
                     </Label>
                     <Input
-                      id="num_questions"
+                      id="num_flashcards"
                       type="number"
-                      min="5"
+                      min="1"
                       max="50"
-                      value={form.num_questions}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "num_questions",
-                          parseInt(e.target.value)
-                        )
-                      }
+                      value={numFlashcardsInput}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNumFlashcardsInput(value);
+
+                        // Only update form state if it's a valid number
+                        if (value !== "" && !isNaN(parseInt(value))) {
+                          const numValue = parseInt(value);
+                          if (numValue >= 1 && numValue <= 50) {
+                            handleInputChange("num_flashcards", numValue);
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // On blur, ensure we have a valid value
+                        if (
+                          numFlashcardsInput === "" ||
+                          isNaN(parseInt(numFlashcardsInput))
+                        ) {
+                          setNumFlashcardsInput("10");
+                          handleInputChange("num_flashcards", 10);
+                        } else {
+                          const numValue = parseInt(numFlashcardsInput);
+                          const clampedValue = Math.max(
+                            1,
+                            Math.min(50, numValue)
+                          );
+                          setNumFlashcardsInput(clampedValue.toString());
+                          handleInputChange("num_flashcards", clampedValue);
+                        }
+                      }}
                       className="bg-gray-700/50 border-gray-600 text-white"
                     />
                   </div>
@@ -487,7 +504,7 @@ export default function CreateQuizPage() {
               {/* Content Source */}
               <div className="space-y-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                  <div className="h-8 w-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
                     <FileText className="h-4 w-4 text-white" />
                   </div>
                   <h2 className="text-xl font-bold text-white">
@@ -506,7 +523,7 @@ export default function CreateQuizPage() {
                       onChange={(e) =>
                         handleInputChange("content_source", e.target.value)
                       }
-                      placeholder="Paste your study material, notes, or content that you want the quiz to be based on..."
+                      placeholder="Paste your study material, notes, or content that you want the flashcards to be based on..."
                       rows={6}
                       className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical"
                     />
@@ -528,7 +545,7 @@ export default function CreateQuizPage() {
                           e.target.value
                         )
                       }
-                      placeholder="Any specific instructions for the AI (e.g., 'Focus on practical examples', 'Include code snippets', etc.)"
+                      placeholder="Any specific instructions for the AI (e.g., 'Focus on definitions', 'Include examples', etc.)"
                       rows={3}
                       className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical"
                     />
@@ -539,19 +556,19 @@ export default function CreateQuizPage() {
               {/* Generate Button */}
               <div className="pt-6 border-t border-gray-700">
                 <Button
-                  onClick={handleGenerateQuiz}
+                  onClick={handleGenerateFlashcards}
                   disabled={isGenerating}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>Generating Quiz...</span>
+                      <span>Generating Flashcards...</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2">
                       <Sparkles className="h-5 w-5" />
-                      <span>Generate AI Quiz</span>
+                      <span>Generate AI Flashcards</span>
                     </div>
                   )}
                 </Button>
@@ -566,22 +583,24 @@ export default function CreateQuizPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 p-6">
+          <Card className="bg-gradient-to-r from-teal-500/10 to-blue-500/10 border-teal-500/20 p-6">
             <div className="flex items-start space-x-4">
-              <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <Zap className="h-4 w-4 text-white" />
+              <div className="h-8 w-8 bg-gradient-to-br from-teal-500 to-blue-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                <Lightbulb className="h-4 w-4 text-white" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold text-blue-300">Pro Tips</h3>
+                <h3 className="text-lg font-bold text-teal-300">Pro Tips</h3>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>
-                    • Provide detailed content for more accurate questions
+                    • Provide detailed content for more accurate flashcards
                   </li>
-                  <li>• Mix question types for better learning experience</li>
+                  <li>• Use specific topics for better targeted learning</li>
                   <li>
-                    • Use specific additional instructions for targeted results
+                    • Include clear instructions for optimal AI generation
                   </li>
-                  <li>• Start with 10-15 questions for optimal quiz length</li>
+                  <li>
+                    • Start with 10-15 flashcards for effective study sessions
+                  </li>
                 </ul>
               </div>
             </div>

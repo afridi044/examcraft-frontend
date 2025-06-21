@@ -50,6 +50,14 @@ The system is configured to use free models from OpenRouter:
 - Difficulty levels (1-5)
 - Variable question count (5-50)
 
+✅ **AI Flashcard Generation**
+
+- Custom topics and content source
+- Manual and AI-powered creation modes
+- Difficulty levels (1-5)
+- Variable flashcard count (1-50)
+- Professional modal interface with smooth animations
+
 ✅ **Quiz Taking Interface**
 
 - Timer functionality
@@ -88,6 +96,20 @@ The system is configured to use free models from OpenRouter:
 
 - Verify your Supabase configuration
 - Check if the user is properly authenticated
+- Review the network tab for failed API calls
+
+### "Failed to generate flashcards" Error
+
+- Check your internet connection
+- Verify your OpenRouter API key is valid
+- Ensure the topic name is provided
+- Check the browser console for detailed error messages
+
+### Flashcards Not Saving to Database
+
+- Verify your Supabase configuration
+- Check if the user is properly authenticated
+- Ensure topic selection is valid
 - Review the network tab for failed API calls
 
 ## Support
