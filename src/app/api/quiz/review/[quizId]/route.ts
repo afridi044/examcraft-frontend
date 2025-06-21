@@ -41,7 +41,7 @@ interface ReviewData {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { quizId: string } }
+  { params }: { params: Promise<{ quizId: string }> }
 ) {
   try {
     const { searchParams } = new URL(request.url);
@@ -54,7 +54,7 @@ export async function GET(
       );
     }
 
-    const quizId = params.quizId;
+    const { quizId } = await params;
 
     // Get quiz with questions and explanations
     const quizResponse = await db.quizzes.getQuizWithQuestions(quizId);
@@ -122,7 +122,7 @@ export async function GET(
                 content: explanation.content,
                 ai_generated: explanation.ai_generated,
               }
-            : null,
+            : undefined,
           user_answer: userAnswerMap.get(question.question_id) || null,
         };
       });
@@ -152,7 +152,7 @@ export async function GET(
         quiz_id: quiz.quiz_id,
         title: quiz.title,
         description: quiz.description,
-        topic: quiz.topics ? { name: quiz.topics.name } : undefined,
+        topic: quiz.topic ? { name: quiz.topic.name } : undefined,
       },
       questions,
       quiz_stats: {

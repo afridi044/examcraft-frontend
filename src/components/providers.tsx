@@ -1,8 +1,16 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
+
+// Dynamically import devtools only in development
+const ReactQueryDevtools = lazy(() =>
+  process.env.NODE_ENV === "development"
+    ? import("@tanstack/react-query-devtools").then((d) => ({
+        default: d.ReactQueryDevtools,
+      }))
+    : Promise.resolve({ default: () => null })
+);
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   // Create a new QueryClient instance for each component tree
@@ -39,7 +47,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {children}
       {/* Only show devtools in development */}
       {process.env.NODE_ENV === "development" && (
-        <ReactQueryDevtools initialIsOpen={false} />
+        <Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </Suspense>
       )}
     </QueryClientProvider>
   );

@@ -14,6 +14,8 @@ import {
   Brain,
   Lightbulb,
   RotateCcw,
+  CreditCard,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -66,6 +68,9 @@ export default function QuizReviewPage() {
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [flashcardStates, setFlashcardStates] = useState<
+    Record<string, "idle" | "creating" | "created" | "exists">
+  >({});
 
   const quizId = params.quizId as string;
 
@@ -127,6 +132,53 @@ export default function QuizReviewPage() {
     return colors[difficulty || 0] || "text-gray-400";
   };
 
+  const generateFlashcard = async (questionId: string) => {
+    if (!currentUser) {
+      toast.error("Please log in to create flashcards");
+      return;
+    }
+
+    setFlashcardStates((prev) => ({ ...prev, [questionId]: "creating" }));
+
+    try {
+      const response = await fetch("/api/flashcards/generate-from-question", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: currentUser.user_id,
+          question_id: questionId,
+          quiz_id: quizId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setFlashcardStates((prev) => ({ ...prev, [questionId]: "created" }));
+        toast.success("Flashcard created successfully!");
+
+        // Reset to idle after 3 seconds to show the success state briefly
+        setTimeout(() => {
+          setFlashcardStates((prev) => ({ ...prev, [questionId]: "idle" }));
+        }, 3000);
+      } else if (response.status === 409) {
+        // Flashcard already exists
+        setFlashcardStates((prev) => ({ ...prev, [questionId]: "exists" }));
+        toast("Flashcard already exists for this question");
+      } else {
+        throw new Error(data.error || "Failed to create flashcard");
+      }
+    } catch (error) {
+      console.error("Error creating flashcard:", error);
+      setFlashcardStates((prev) => ({ ...prev, [questionId]: "idle" }));
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create flashcard"
+      );
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -169,24 +221,24 @@ export default function QuizReviewPage() {
       <div className="max-w-6xl mx-auto p-20 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
             <Button
               onClick={() => router.push("/dashboard")}
               variant="outline"
               size="icon"
-              className="border-gray-600 text-gray-400 hover:bg-gray-700/50"
+              className="border-gray-600/50 text-gray-400 hover:border-purple-400 hover:text-purple-400 hover:bg-purple-500/10 transition-all duration-200"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-3xl font-bold text-white">
                 Quiz Review: {reviewData.quiz.title}
               </h1>
-              <p className="text-gray-400">
+              <p className="text-gray-400 text-lg">
                 {reviewData.quiz.description || "Review your quiz performance"}
               </p>
               {reviewData.quiz.topic && (
-                <p className="text-sm text-purple-400 mt-1">
+                <p className="text-sm text-purple-400 mt-1 font-medium">
                   Topic: {reviewData.quiz.topic.name}
                 </p>
               )}
@@ -195,8 +247,7 @@ export default function QuizReviewPage() {
           <div className="flex space-x-3">
             <Button
               onClick={() => router.push(`/quiz/take/${quizId}`)}
-              variant="outline"
-              className="border-purple-500 text-purple-400 hover:bg-purple-500/20"
+              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium px-6 py-2 shadow-lg hover:shadow-purple-500/25 transition-all duration-200"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
               Retake Quiz
@@ -205,7 +256,7 @@ export default function QuizReviewPage() {
         </div>
 
         {/* Performance Summary */}
-        <Card className="bg-gray-800/50 border-gray-700/50 p-6">
+        <Card className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-gray-700/50 p-8 shadow-xl">
           <div className="flex items-center space-x-3 mb-6">
             <Trophy className="h-6 w-6 text-yellow-500" />
             <h2 className="text-xl font-bold text-white">
@@ -266,7 +317,7 @@ export default function QuizReviewPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className="bg-gray-800/50 border-gray-700/50 p-6">
+                <Card className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 border-gray-700/50 p-6 shadow-lg hover:shadow-xl transition-all duration-300">
                   {/* Question Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
@@ -297,17 +348,73 @@ export default function QuizReviewPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {isCorrect ? (
-                        <CheckCircle className="h-6 w-6 text-green-500" />
-                      ) : (
-                        <XCircle className="h-6 w-6 text-red-500" />
-                      )}
-                      <span
-                        className={`font-medium ${isCorrect ? "text-green-400" : "text-red-400"}`}
+                    <div className="flex items-center space-x-3">
+                      {/* Flashcard Generation Button */}
+                      <Button
+                        size="sm"
+                        onClick={() => generateFlashcard(question.question_id)}
+                        disabled={
+                          flashcardStates[question.question_id] === "creating"
+                        }
+                        className={`
+                          relative overflow-hidden transition-all duration-300 font-medium
+                          ${
+                            flashcardStates[question.question_id] === "created"
+                              ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/25 border-0"
+                              : flashcardStates[question.question_id] ===
+                                  "exists"
+                                ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/25 border-0"
+                                : flashcardStates[question.question_id] ===
+                                    "creating"
+                                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/25 border-0 cursor-not-allowed"
+                                  : "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-lg hover:shadow-indigo-500/25 border-0"
+                          }
+                        `}
+                        title={
+                          flashcardStates[question.question_id] === "created"
+                            ? "Flashcard created successfully!"
+                            : flashcardStates[question.question_id] === "exists"
+                              ? "Flashcard already exists for this question"
+                              : "Create flashcard from this question"
+                        }
                       >
-                        {isCorrect ? "Correct" : "Incorrect"}
-                      </span>
+                        <div className="flex items-center space-x-2">
+                          {flashcardStates[question.question_id] ===
+                          "creating" ? (
+                            <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                          ) : flashcardStates[question.question_id] ===
+                            "created" ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                          <span className="hidden sm:inline">
+                            {flashcardStates[question.question_id] === "created"
+                              ? "Created!"
+                              : flashcardStates[question.question_id] ===
+                                  "exists"
+                                ? "Exists"
+                                : flashcardStates[question.question_id] ===
+                                    "creating"
+                                  ? "Creating..."
+                                  : "Flashcard"}
+                          </span>
+                        </div>
+                      </Button>
+
+                      {/* Correct/Incorrect Status */}
+                      <div className="flex items-center space-x-2">
+                        {isCorrect ? (
+                          <CheckCircle className="h-6 w-6 text-green-500" />
+                        ) : (
+                          <XCircle className="h-6 w-6 text-red-500" />
+                        )}
+                        <span
+                          className={`font-medium ${isCorrect ? "text-green-400" : "text-red-400"}`}
+                        >
+                          {isCorrect ? "Correct" : "Incorrect"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -416,24 +523,25 @@ export default function QuizReviewPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-center space-x-4 pt-8">
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-12">
           <Button
             onClick={() => router.push("/dashboard")}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium px-8 py-3 shadow-lg hover:shadow-purple-500/25 transition-all duration-200 w-full sm:w-auto"
           >
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Return to Dashboard
           </Button>
           <Button
             onClick={() => router.push("/quiz/create")}
             variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            className="border-gray-600/50 text-gray-300 hover:border-blue-400 hover:text-blue-400 hover:bg-blue-500/10 font-medium px-8 py-3 transition-all duration-200 w-full sm:w-auto"
           >
+            <BookOpen className="h-4 w-4 mr-2" />
             Create New Quiz
           </Button>
           <Button
             onClick={() => router.push(`/quiz/take/${quizId}`)}
-            variant="outline"
-            className="border-purple-500 text-purple-400 hover:bg-purple-500/20"
+            className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-medium px-8 py-3 shadow-lg hover:shadow-blue-500/25 transition-all duration-200 w-full sm:w-auto"
           >
             <RotateCcw className="h-4 w-4 mr-2" />
             Retake Quiz

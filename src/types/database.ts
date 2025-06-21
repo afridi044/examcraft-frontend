@@ -112,6 +112,8 @@ export interface Flashcard {
   interval_days: number;
   ease_factor: number;
   repetitions: number;
+  mastery_status: "learning" | "under_review" | "mastered";
+  consecutive_correct: number;
   created_at: string;
   updated_at: string;
   tags?: string[];
@@ -289,6 +291,8 @@ export interface UpdateFlashcardInput {
   interval_days?: number;
   ease_factor?: number;
   repetitions?: number;
+  mastery_status?: "learning" | "under_review" | "mastered";
+  consecutive_correct?: number;
   tags?: string[];
 }
 

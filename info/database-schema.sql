@@ -172,6 +172,8 @@ CREATE TABLE flashcards (
     interval_days INTEGER NOT NULL DEFAULT 1,
     ease_factor DECIMAL(4,2) NOT NULL DEFAULT 2.5,
     repetitions INTEGER NOT NULL DEFAULT 0,
+    mastery_status VARCHAR(20) NOT NULL DEFAULT 'learning' CHECK (mastery_status IN ('learning', 'under_review', 'mastered')),
+    consecutive_correct INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tags TEXT[]

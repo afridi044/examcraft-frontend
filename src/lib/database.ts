@@ -903,7 +903,7 @@ export const flashcardService = {
         .select(
           `
           *,
-          topics(*),
+          topic:topics(*),
           questions(
             *,
             question_options(*)
@@ -920,7 +920,7 @@ export const flashcardService = {
     }
   },
 
-  // Get flashcards due for review
+  // Get flashcards due for review (legacy - kept for compatibility)
   async getFlashcardsDueForReview(
     userId: string
   ): Promise<ApiResponse<FlashcardWithTopic[]>> {
@@ -930,7 +930,7 @@ export const flashcardService = {
         .select(
           `
           *,
-          topics(*),
+          topic:topics(*),
           questions(
             *,
             question_options(*)
@@ -943,6 +943,64 @@ export const flashcardService = {
 
       if (error) return handleError(error);
       return handleSuccess(data || []);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  // Get flashcards by mastery status (Magoosh-style)
+  async getFlashcardsByMastery(
+    userId: string,
+    masteryStatus?: "learning" | "under_review" | "mastered"
+  ): Promise<ApiResponse<FlashcardWithTopic[]>> {
+    try {
+      let query = supabase
+        .from(TABLE_NAMES.FLASHCARDS)
+        .select(
+          `
+          *,
+          topic:topics(*),
+          questions(
+            *,
+            question_options(*)
+          )
+        `
+        )
+        .eq("user_id", userId);
+
+      if (masteryStatus) {
+        query = query.eq("mastery_status", masteryStatus);
+      }
+
+      const { data, error } = await query.order("updated_at", {
+        ascending: false,
+      });
+
+      if (error) return handleError(error);
+      return handleSuccess(data || []);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  // Get single flashcard by ID
+  async getFlashcardById(
+    flashcardId: string
+  ): Promise<ApiResponse<FlashcardWithTopic>> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAMES.FLASHCARDS)
+        .select(
+          `
+          *,
+          topic:topics(*)
+        `
+        )
+        .eq("flashcard_id", flashcardId)
+        .single();
+
+      if (error) return handleError(error);
+      return handleSuccess(data);
     } catch (error) {
       return handleError(error);
     }

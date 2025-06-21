@@ -343,6 +343,9 @@ export function useUserFlashcards(userId: string) {
     queryFn: () => db.flashcards.getUserFlashcards(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus (when navigating back)
+    refetchOnMount: true, // Always refetch on mount
   });
 }
 

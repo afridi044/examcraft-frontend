@@ -15,14 +15,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Flag,
-  Brain,
   Trophy,
-  Target,
   BookOpen,
   Loader2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import type { QuestionWithOptions } from "@/types/database";
 
 interface UserAnswer {
   question_id: string;
@@ -116,10 +113,11 @@ export default function TakeQuizPage() {
       const correctOption = currentQuestion.question_options?.find(
         (opt) => opt.is_correct
       );
-      const isCorrect =
+      const isCorrect = Boolean(
         correctOption?.option_id === optionId ||
-        (textAnswer &&
-          correctOption?.content.toLowerCase() === textAnswer.toLowerCase());
+          (textAnswer &&
+            correctOption?.content.toLowerCase() === textAnswer.toLowerCase())
+      );
 
       const answer: UserAnswer = {
         question_id: currentQuestion.question_id,
