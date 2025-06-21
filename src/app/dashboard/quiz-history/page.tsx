@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -65,170 +65,167 @@ export default function QuizHistoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
 
-  // Fetch user's quiz attempts with scores
-  const {
-    data: quizAttempts,
-    isLoading: loadingAttempts,
-    error: attemptsError,
-  } = useQuery({
+  // OPTIMIZED: Fetch user's quiz attempts with cleaner error handling
+  const { data: quizAttempts, isLoading: loadingAttempts } = useQuery({
     queryKey: ["quiz-attempts", currentUser?.user_id],
     queryFn: async () => {
       if (!currentUser?.user_id) {
-        console.log("No user ID available for quiz attempts");
         return [];
       }
 
-      console.log("Fetching quiz attempts for user:", currentUser.user_id);
-
-      // Get user answers grouped by quiz with calculated scores
       const response = await fetch(
         `/api/quiz/user-attempts/${currentUser.user_id}`
       );
 
-      console.log("Quiz attempts API response status:", response.status);
-
       if (!response.ok) {
-        console.error(
-          "Quiz attempts API error:",
-          response.status,
-          response.statusText
-        );
         throw new Error("Failed to fetch quiz attempts");
       }
 
-      const data = await response.json();
-      console.log("Quiz attempts data received:", data);
-      console.log("Number of quiz attempts:", data?.length || 0);
-
-      return data;
+      return response.json();
     },
     enabled: !!currentUser?.user_id,
+    staleTime: 2 * 60 * 1000, // 2 minutes cache
+    refetchOnWindowFocus: false,
   });
 
-  // Log any query errors
-  if (attemptsError) {
-    console.error("Quiz attempts query error:", attemptsError);
-  }
-
-  // Calculate statistics
-  const stats = quizAttempts?.reduce(
-    (
-      acc: {
-        totalQuizzes: number;
-        completedQuizzes: number;
-        incompleteQuizzes: number;
-        totalScore: number;
-        totalScoreIncludingIncomplete: number;
-        totalTime: number;
-        passedQuizzes: number;
-        totalQuestions: number;
-        correctAnswers: number;
-      },
-      attempt: QuizAttempt
-    ) => {
-      // Count all quizzes for total count
-      acc.totalQuizzes++;
-
-      // Count completed quizzes and their statistics
-      if (attempt.status === "completed") {
-        acc.completedQuizzes++;
-        acc.totalScore += attempt.score_percentage;
-        acc.totalScoreIncludingIncomplete += attempt.score_percentage;
-        acc.totalTime += attempt.time_spent_minutes;
-        if (attempt.score_percentage >= 70) acc.passedQuizzes++;
-        acc.totalQuestions += attempt.total_questions;
-        acc.correctAnswers += attempt.correct_answers;
-      }
-
-      // Count incomplete quizzes (for a more comprehensive average)
-      if (attempt.status === "incomplete") {
-        acc.incompleteQuizzes++;
-        acc.totalScoreIncludingIncomplete += attempt.score_percentage;
-        // Don't add time for incomplete quizzes - only for completed ones
-        acc.totalQuestions += attempt.total_questions;
-        acc.correctAnswers += attempt.correct_answers;
-      }
-
-      return acc;
-    },
-    {
-      totalQuizzes: 0,
-      completedQuizzes: 0,
-      incompleteQuizzes: 0,
-      totalScore: 0,
-      totalScoreIncludingIncomplete: 0,
-      totalTime: 0,
-      passedQuizzes: 0,
-      totalQuestions: 0,
-      correctAnswers: 0,
+  // OPTIMIZED: Memoized statistics and filtering calculations
+  const { stats, filteredAttempts } = useMemo(() => {
+    if (!quizAttempts) {
+      return {
+        stats: {
+          totalQuizzes: 0,
+          completedQuizzes: 0,
+          incompleteQuizzes: 0,
+          totalScore: 0,
+          totalScoreIncludingIncomplete: 0,
+          totalTime: 0,
+          passedQuizzes: 0,
+          totalQuestions: 0,
+          correctAnswers: 0,
+          averageScore: 0,
+          averageTime: 0,
+          passRate: 0,
+        },
+        filteredAttempts: [],
+      };
     }
-  ) || {
-    totalQuizzes: 0,
-    completedQuizzes: 0,
-    incompleteQuizzes: 0,
-    totalScore: 0,
-    totalScoreIncludingIncomplete: 0,
-    totalTime: 0,
-    passedQuizzes: 0,
-    totalQuestions: 0,
-    correctAnswers: 0,
-  };
 
-  // Calculate average score including both completed and incomplete quizzes
-  const averageScore =
-    stats.completedQuizzes + stats.incompleteQuizzes > 0
-      ? stats.totalScoreIncludingIncomplete /
-        (stats.completedQuizzes + stats.incompleteQuizzes)
-      : 0;
+    // Calculate statistics in a single pass
+    const stats = quizAttempts.reduce(
+      (
+        acc: {
+          totalQuizzes: number;
+          completedQuizzes: number;
+          incompleteQuizzes: number;
+          totalScore: number;
+          totalScoreIncludingIncomplete: number;
+          totalTime: number;
+          passedQuizzes: number;
+          totalQuestions: number;
+          correctAnswers: number;
+          averageScore: number;
+          averageTime: number;
+          passRate: number;
+        },
+        attempt: QuizAttempt
+      ) => {
+        acc.totalQuizzes++;
 
-  const averageTime =
-    stats.completedQuizzes > 0 ? stats.totalTime / stats.completedQuizzes : 0;
+        if (attempt.status === "completed") {
+          acc.completedQuizzes++;
+          acc.totalScore += attempt.score_percentage;
+          acc.totalScoreIncludingIncomplete += attempt.score_percentage;
+          acc.totalTime += attempt.time_spent_minutes;
+          if (attempt.score_percentage >= 70) acc.passedQuizzes++;
+          acc.totalQuestions += attempt.total_questions;
+          acc.correctAnswers += attempt.correct_answers;
+        }
 
-  const passRate =
-    stats.completedQuizzes > 0
-      ? (stats.passedQuizzes / stats.completedQuizzes) * 100
-      : 0;
+        if (attempt.status === "incomplete") {
+          acc.incompleteQuizzes++;
+          acc.totalScoreIncludingIncomplete += attempt.score_percentage;
+          acc.totalQuestions += attempt.total_questions;
+          acc.correctAnswers += attempt.correct_answers;
+        }
 
-  // Filter and sort quiz attempts
-  const filteredAttempts = quizAttempts
-    ?.filter((attempt: QuizAttempt) => {
-      const matchesSearch =
-        attempt.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        attempt.topic_name?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesFilter =
-        filterBy === "all" ||
-        (filterBy === "completed" && attempt.status === "completed") ||
-        (filterBy === "incomplete" && attempt.status === "incomplete") ||
-        (filterBy === "not_attempted" && attempt.status === "not_attempted") ||
-        (filterBy === "passed" &&
-          attempt.status === "completed" &&
-          attempt.score_percentage >= 70) ||
-        (filterBy === "failed" &&
-          attempt.status === "completed" &&
-          attempt.score_percentage < 70);
-
-      return matchesSearch && matchesFilter;
-    })
-    ?.sort((a: QuizAttempt, b: QuizAttempt) => {
-      let comparison = 0;
-
-      switch (sortBy) {
-        case "date":
-          const dateA = new Date(a.completed_at || a.created_at);
-          const dateB = new Date(b.completed_at || b.created_at);
-          comparison = dateA.getTime() - dateB.getTime();
-          break;
-        case "score":
-          comparison = a.score_percentage - b.score_percentage;
-          break;
-        case "title":
-          comparison = a.title.localeCompare(b.title);
-          break;
+        return acc;
+      },
+      {
+        totalQuizzes: 0,
+        completedQuizzes: 0,
+        incompleteQuizzes: 0,
+        totalScore: 0,
+        totalScoreIncludingIncomplete: 0,
+        totalTime: 0,
+        passedQuizzes: 0,
+        totalQuestions: 0,
+        correctAnswers: 0,
+        averageScore: 0,
+        averageTime: 0,
+        passRate: 0,
       }
+    );
 
-      return sortOrder === "asc" ? comparison : -comparison;
-    });
+    // Calculate derived statistics
+    stats.averageScore =
+      stats.completedQuizzes + stats.incompleteQuizzes > 0
+        ? stats.totalScoreIncludingIncomplete /
+          (stats.completedQuizzes + stats.incompleteQuizzes)
+        : 0;
+
+    stats.averageTime =
+      stats.completedQuizzes > 0 ? stats.totalTime / stats.completedQuizzes : 0;
+
+    stats.passRate =
+      stats.completedQuizzes > 0
+        ? (stats.passedQuizzes / stats.completedQuizzes) * 100
+        : 0;
+
+    // Filter and sort in a single operation
+    const searchLower = searchTerm.toLowerCase();
+    const filteredAttempts = quizAttempts
+      .filter((attempt: QuizAttempt) => {
+        const matchesSearch =
+          attempt.title.toLowerCase().includes(searchLower) ||
+          attempt.topic_name?.toLowerCase().includes(searchLower);
+
+        const matchesFilter =
+          filterBy === "all" ||
+          (filterBy === "completed" && attempt.status === "completed") ||
+          (filterBy === "incomplete" && attempt.status === "incomplete") ||
+          (filterBy === "not_attempted" &&
+            attempt.status === "not_attempted") ||
+          (filterBy === "passed" &&
+            attempt.status === "completed" &&
+            attempt.score_percentage >= 70) ||
+          (filterBy === "failed" &&
+            attempt.status === "completed" &&
+            attempt.score_percentage < 70);
+
+        return matchesSearch && matchesFilter;
+      })
+      .sort((a: QuizAttempt, b: QuizAttempt) => {
+        let comparison = 0;
+
+        switch (sortBy) {
+          case "date":
+            const dateA = new Date(a.completed_at || a.created_at).getTime();
+            const dateB = new Date(b.completed_at || b.created_at).getTime();
+            comparison = dateA - dateB;
+            break;
+          case "score":
+            comparison = a.score_percentage - b.score_percentage;
+            break;
+          case "title":
+            comparison = a.title.localeCompare(b.title);
+            break;
+        }
+
+        return sortOrder === "asc" ? comparison : -comparison;
+      });
+
+    return { stats, filteredAttempts };
+  }, [quizAttempts, searchTerm, filterBy, sortBy, sortOrder]);
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "Not completed";
@@ -521,10 +518,10 @@ export default function QuizHistoryPage() {
                   Average Score
                 </p>
                 <p
-                  className={`text-2xl font-bold ${getScoreColor(averageScore)}`}
+                  className={`text-2xl font-bold ${getScoreColor(stats.averageScore)}`}
                 >
                   {stats.completedQuizzes + stats.incompleteQuizzes > 0
-                    ? averageScore.toFixed(1)
+                    ? stats.averageScore.toFixed(1)
                     : "--"}
                   %
                 </p>
@@ -541,8 +538,13 @@ export default function QuizHistoryPage() {
                 <p className="text-sm text-gray-400 uppercase tracking-wide">
                   Pass Rate
                 </p>
-                <p className={`text-2xl font-bold ${getScoreColor(passRate)}`}>
-                  {stats.completedQuizzes > 0 ? passRate.toFixed(1) : "--"}%
+                <p
+                  className={`text-2xl font-bold ${getScoreColor(stats.passRate)}`}
+                >
+                  {stats.completedQuizzes > 0
+                    ? stats.passRate.toFixed(1)
+                    : "--"}
+                  %
                 </p>
                 <p className="text-xs text-gray-500">
                   {stats.passedQuizzes}/{stats.completedQuizzes} passed
@@ -561,7 +563,10 @@ export default function QuizHistoryPage() {
                   Avg Time
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {stats.completedQuizzes > 0 ? averageTime.toFixed(1) : "--"}m
+                  {stats.completedQuizzes > 0
+                    ? stats.averageTime.toFixed(1)
+                    : "--"}
+                  m
                 </p>
                 <p className="text-xs text-gray-500">Per completed quiz</p>
               </div>

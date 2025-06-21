@@ -66,26 +66,7 @@ export async function GET(
       );
     }
 
-    console.log("All quizzes found:", allQuizzes?.length || 0);
-    console.log("Quiz answers found:", quizAnswers?.length || 0);
-
-    // Debug: Log some sample answers
-    if (quizAnswers && quizAnswers.length > 0) {
-      console.log(
-        "Sample answers:",
-        quizAnswers.slice(0, 3).map((a) => ({
-          quiz_id: a.quiz_id,
-          question_id: a.question_id,
-          is_correct: a.is_correct,
-          created_at: a.created_at,
-          selected_option_id: a.selected_option_id,
-          text_answer: a.text_answer,
-        }))
-      );
-    }
-
     if (!allQuizzes || allQuizzes.length === 0) {
-      console.log("No quizzes found for user:", userId);
       return NextResponse.json([]);
     }
 
@@ -134,20 +115,24 @@ export async function GET(
       questionsGroupedByQuiz.get(quizId).push(qq);
     });
 
-    // Process each quiz to determine its status and statistics
+    // OPTIMIZED: Process each quiz with combined statistics calculation
     const quizHistory = allQuizzes.map((quiz: any) => {
       const quizId = quiz.quiz_id;
       const answers = answersGroupedByQuiz.get(quizId) || new Map();
       const questions = questionsGroupedByQuiz.get(quizId) || [];
       const totalQuestions = questions.length;
 
+      // Base quiz info
+      const baseQuiz = {
+        quiz_id: quizId,
+        title: quiz.title,
+        topic_name: quiz.topics?.name,
+        created_at: quiz.created_at,
+      };
+
       if (totalQuestions === 0) {
-        // Quiz has no questions
         return {
-          quiz_id: quizId,
-          title: quiz.title,
-          topic_name: quiz.topics?.name,
-          created_at: quiz.created_at,
+          ...baseQuiz,
           status: "empty",
           total_questions: 0,
           correct_answers: 0,
@@ -158,12 +143,8 @@ export async function GET(
       }
 
       if (answers.size === 0) {
-        // Quiz created but never attempted
         return {
-          quiz_id: quizId,
-          title: quiz.title,
-          topic_name: quiz.topics?.name,
-          created_at: quiz.created_at,
+          ...baseQuiz,
           completed_at: null,
           status: "not_attempted",
           total_questions: totalQuestions,
@@ -174,64 +155,46 @@ export async function GET(
         };
       }
 
-      if (answers.size < totalQuestions) {
-        // Quiz partially completed
-        const correctAnswers = Array.from(answers.values()).filter(
-          (a: any) => a.is_correct
-        ).length;
-        const totalTime = Array.from(answers.values()).reduce(
-          (sum: number, a: any) => sum + (a.time_taken_seconds || 0),
-          0
-        );
-        const latestAttempt = Array.from(answers.values()).reduce(
-          (latest: string, a: any) =>
-            new Date(a.created_at) > new Date(latest) ? a.created_at : latest,
-          answers.values().next().value.created_at
-        );
+      // OPTIMIZED: Calculate all statistics in a single pass
+      const answerValues = Array.from(answers.values());
+      let correctAnswers = 0;
+      let totalTime = 0;
+      let latestAttempt = answerValues[0]?.created_at || quiz.created_at;
 
+      for (const answer of answerValues) {
+        if (answer.is_correct) correctAnswers++;
+        totalTime += answer.time_taken_seconds || 0;
+        if (new Date(answer.created_at) > new Date(latestAttempt)) {
+          latestAttempt = answer.created_at;
+        }
+      }
+
+      const scorePercentage =
+        Math.round((correctAnswers / totalQuestions) * 100 * 10) / 10;
+      const timeSpentMinutes = Math.round((totalTime / 60) * 10) / 10;
+
+      if (answers.size < totalQuestions) {
         return {
-          quiz_id: quizId,
-          title: quiz.title,
-          topic_name: quiz.topics?.name,
-          created_at: quiz.created_at,
+          ...baseQuiz,
           completed_at: latestAttempt,
           status: "incomplete",
           total_questions: totalQuestions,
           answered_questions: answers.size,
           correct_answers: correctAnswers,
-          score_percentage:
-            Math.round((correctAnswers / totalQuestions) * 100 * 10) / 10,
-          time_spent_minutes: Math.round((totalTime / 60) * 10) / 10,
+          score_percentage: scorePercentage,
+          time_spent_minutes: timeSpentMinutes,
           completion_status: `${answers.size}/${totalQuestions} questions answered`,
         };
       }
 
-      // Quiz fully completed
-      const correctAnswers = Array.from(answers.values()).filter(
-        (a: any) => a.is_correct
-      ).length;
-      const totalTime = Array.from(answers.values()).reduce(
-        (sum: number, a: any) => sum + (a.time_taken_seconds || 0),
-        0
-      );
-      const latestAttempt = Array.from(answers.values()).reduce(
-        (latest: string, a: any) =>
-          new Date(a.created_at) > new Date(latest) ? a.created_at : latest,
-        answers.values().next().value.created_at
-      );
-
       return {
-        quiz_id: quizId,
-        title: quiz.title,
-        topic_name: quiz.topics?.name,
-        created_at: quiz.created_at,
+        ...baseQuiz,
         completed_at: latestAttempt,
         status: "completed",
         total_questions: totalQuestions,
         correct_answers: correctAnswers,
-        score_percentage:
-          Math.round((correctAnswers / totalQuestions) * 100 * 10) / 10,
-        time_spent_minutes: Math.round((totalTime / 60) * 10) / 10,
+        score_percentage: scorePercentage,
+        time_spent_minutes: timeSpentMinutes,
         completion_status: "Completed",
       };
     });
@@ -243,7 +206,6 @@ export async function GET(
       return dateB.getTime() - dateA.getTime();
     });
 
-    console.log("Final quiz history:", quizHistory.length, "items");
     return NextResponse.json(quizHistory);
   } catch (error) {
     console.error("Unexpected error in quiz attempts API:", error);

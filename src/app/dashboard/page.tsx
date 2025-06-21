@@ -38,45 +38,25 @@ export default function DashboardPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const invalidateUserData = useInvalidateUserData();
 
-  // Log user information on initial load and when user or currentUser changes
-  useEffect(() => {
-    if (user) {
-      console.log("Dashboard - Supabase Auth User ID:", user.id);
-      // console.log("Dashboard - Supabase Auth User Email:", user.email);
-    }
+  // Use the Supabase user ID directly for faster initial load
+  const userId = currentUser?.user_id || user?.id || "";
 
-    if (currentUser) {
-      //console.log("Dashboard - Database User:", currentUser);
-      console.log("Dashboard - Database User ID:", currentUser.user_id);
-    }
-  }, [user, currentUser]);
-
-  // Refresh data when dashboard comes into focus (e.g., when navigating back from quiz creation)
+  // Refresh data when dashboard comes into focus (optimized)
   useEffect(() => {
     const handleFocus = () => {
-      if (currentUser?.user_id) {
-        console.log("Dashboard: Refreshing data due to window focus");
-        invalidateUserData(currentUser.user_id);
+      if (userId) {
+        invalidateUserData(userId);
       }
     };
 
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [currentUser?.user_id, invalidateUserData]);
+  }, [userId, invalidateUserData]);
 
-  // Get dashboard statistics (only when user is authenticated and we have the user profile)
-  const { data: stats, isLoading: statsLoading } = useDashboardStats(
-    currentUser?.user_id || ""
-  );
-
-  // Get recent activity (only when user is authenticated and we have the user profile)
-  const { data: recentActivity, isLoading: activityLoading } =
-    useRecentActivity(currentUser?.user_id || "");
-
-  // Get topic progress (only when user is authenticated and we have the user profile)
-  const { data: topicProgress, isLoading: progressLoading } = useTopicProgress(
-    currentUser?.user_id || ""
-  );
+  // PARALLEL DATA FETCHING - All hooks run simultaneously for faster loading
+  const { data: stats, isLoading: statsLoading } = useDashboardStats(userId);
+  const { data: recentActivity } = useRecentActivity(userId);
+  const { data: topicProgress } = useTopicProgress(userId);
 
   // Log when dashboard data is refreshed
   useEffect(() => {
@@ -89,9 +69,8 @@ export default function DashboardPage() {
     }
   }, [stats, recentActivity, topicProgress]);
 
-  // Calculate if we're still loading data
-  const dataLoading =
-    userLoading || statsLoading || activityLoading || progressLoading;
+  // Individual loading states for progressive loading
+  const isStatsLoading = userLoading || statsLoading;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -114,8 +93,8 @@ export default function DashboardPage() {
     }
   };
 
-  // Show premium dark loading state for everything
-  if (loading || dataLoading || !user) {
+  // OPTIMIZED: Show auth loading only, render dashboard with skeleton for data loading
+  if (loading || !user) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -127,7 +106,7 @@ export default function DashboardPage() {
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-2xl blur-xl"></div>
             </div>
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
-              Loading Dashboard
+              Signing In
             </h2>
             <p className="text-gray-400">
               Preparing your learning experience...
@@ -159,9 +138,13 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Quizzes
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.totalQuizzes || 0}
-                  </p>
+                  {isStatsLoading ? (
+                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-bold text-white">
+                      {stats?.totalQuizzes || 0}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -182,9 +165,13 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Exams
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.totalExams || 0}
-                  </p>
+                  {isStatsLoading ? (
+                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-bold text-white">
+                      {stats?.totalExams || 0}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -210,9 +197,13 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Flashcards
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.totalFlashcards || 0}
-                  </p>
+                  {isStatsLoading ? (
+                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-bold text-white">
+                      {stats?.totalFlashcards || 0}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">

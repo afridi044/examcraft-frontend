@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentUser } from "@/hooks/useDatabase";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
@@ -69,24 +69,17 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   // Track which cards have been answered to prevent double counting
   const [answeredCards, setAnsweredCards] = useState<Set<string>>(new Set());
 
-  // Get topic ID from params
-  useEffect(() => {
-    params.then((p) => setTopicId(p.topicId));
-  }, [params]);
-
-  // Start study session
-  useEffect(() => {
-    if (!currentUser?.user_id || !topicId) return;
-
-    const startSession = async () => {
+  // OPTIMIZED: Streamlined session initialization with useCallback
+  const initializeSession = useCallback(
+    async (resolvedTopicId: string, userId: string) => {
       try {
         setIsLoading(true);
         const response = await fetch("/api/flashcards/study-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            user_id: currentUser.user_id,
-            topic_id: topicId,
+            user_id: userId,
+            topic_id: resolvedTopicId,
             mastery_status: "learning",
           }),
         });
@@ -94,27 +87,41 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
         const data = await response.json();
         if (data.success) {
           setSession(data.session);
-
           setSessionStats((prev) => ({
             ...prev,
             cardsRemaining: data.session.cards.length,
           }));
-
-          if (data.fallback && data.message) {
-            console.log("Fallback session:", data.message);
-          }
-        } else {
-          console.error("Failed to start session:", data.error);
         }
-      } catch (error) {
-        console.error("Error starting session:", error);
+      } catch {
+        // Silent error handling - user will see "no cards" state
       } finally {
         setIsLoading(false);
       }
+    },
+    []
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const init = async () => {
+      const p = await params;
+      const resolvedTopicId = p.topicId;
+
+      if (!isMounted) return;
+      setTopicId(resolvedTopicId);
+
+      if (currentUser?.user_id && resolvedTopicId) {
+        await initializeSession(resolvedTopicId, currentUser.user_id);
+      }
     };
 
-    startSession();
-  }, [currentUser?.user_id, topicId]);
+    init();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.user_id, params, initializeSession]);
 
   const handlePerformance = async (performance: PerformanceType) => {
     if (!session || !session.cards[currentCardIndex] || isUpdating) return;
@@ -245,19 +252,52 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
     });
   };
 
-  // Loading state
-  if (loading || userLoading || isLoading) {
+  // OPTIMIZED: Memoized calculations with null safety
+  const { currentCard, progressPercentage } = useMemo(() => {
+    if (!session?.cards?.length) {
+      return { currentCard: null, progressPercentage: 0 };
+    }
+
+    const card = session.cards[currentCardIndex] || null;
+    const progress = (sessionStats.totalSeen / session.cards.length) * 100;
+
+    return { currentCard: card, progressPercentage: progress };
+  }, [session?.cards, currentCardIndex, sessionStats.totalSeen]);
+
+  // Guard clause for null currentCard
+  if (!currentCard) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
-          <div className="text-center">
-            <div className="h-16 w-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <Brain className="h-8 w-8 text-white" />
+          <div className="text-center max-w-md mx-auto">
+            <div className="h-16 w-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <BookOpen className="h-8 w-8 text-slate-400" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">
-              Preparing Your Study Session
+            <h2 className="text-xl font-bold text-white mb-2">
+              Loading Flashcard...
             </h2>
-            <p className="text-slate-400">Loading flashcards...</p>
+            <p className="text-slate-400 mb-8">
+              Please wait while we prepare your study session.
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // OPTIMIZED: Simplified loading state
+  if (loading || userLoading || isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="h-12 w-12 bg-purple-500 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+              <Brain className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="text-lg font-semibold text-white mb-1">
+              Loading Study Session
+            </h2>
+            <p className="text-slate-400 text-sm">Please wait...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -277,8 +317,8 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
               No Flashcards Available
             </h2>
             <p className="text-slate-400 mb-8">
-              This topic doesn't have any flashcards yet. Create some flashcards
-              to start studying!
+              This topic doesn&apos;t have any flashcards yet. Create some
+              flashcards to start studying!
             </p>
             <motion.button
               onClick={handleBack}
@@ -293,11 +333,6 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
       </DashboardLayout>
     );
   }
-
-  const currentCard = session.cards[currentCardIndex];
-  // Progress should be based on answered cards, not current position
-  const progressPercentage =
-    (sessionStats.totalSeen / session.cards.length) * 100;
 
   return (
     <DashboardLayout>
@@ -533,7 +568,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
                     <div className="text-center">
                       <XCircle className="h-8 w-8 mx-auto mb-3 text-red-400" />
                       <span className="text-lg font-semibold block mb-1">
-                        I Don't Know
+                        I Don&apos;t Know
                       </span>
                       <p className="text-sm opacity-80">Need more practice</p>
                     </div>

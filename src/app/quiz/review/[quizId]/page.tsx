@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -80,57 +80,62 @@ export default function QuizReviewPage() {
     }
   }, [currentUser, quizId]);
 
-  const fetchReviewData = async () => {
+  // OPTIMIZED: Cleaner data fetching with useCallback
+  const fetchReviewData = useCallback(async () => {
     try {
       setLoading(true);
       const url = `/api/quiz/review/${quizId}?userId=${currentUser?.user_id}`;
-      console.log("Fetching review data from:", url);
-      console.log("Current user:", currentUser);
-
       const response = await fetch(url);
 
-      console.log("Response status:", response.status);
-      console.log("Response ok:", response.ok);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.log("Error response:", errorText);
         throw new Error(`Failed to fetch review data: ${response.status}`);
       }
 
       const data: ReviewData = await response.json();
       setReviewData(data);
-    } catch (err) {
-      console.error("Error fetching review data:", err);
+    } catch {
       setError("Failed to load quiz review");
       toast.error("Failed to load quiz review");
     } finally {
       setLoading(false);
     }
-  };
+  }, [quizId, currentUser?.user_id]);
 
-  const formatTime = (seconds: number) => {
+  // OPTIMIZED: Memoized utility functions
+  const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
-  const getDifficultyLabel = (difficulty?: number) => {
-    const labels = ["", "Beginner", "Easy", "Medium", "Hard", "Expert"];
-    return labels[difficulty || 0] || "Unknown";
-  };
+  const difficultyConfig = useMemo(
+    () => ({
+      labels: ["", "Beginner", "Easy", "Medium", "Hard", "Expert"],
+      colors: [
+        "",
+        "text-green-400",
+        "text-blue-400",
+        "text-yellow-400",
+        "text-orange-400",
+        "text-red-400",
+      ],
+    }),
+    []
+  );
 
-  const getDifficultyColor = (difficulty?: number) => {
-    const colors = [
-      "",
-      "text-green-400",
-      "text-blue-400",
-      "text-yellow-400",
-      "text-orange-400",
-      "text-red-400",
-    ];
-    return colors[difficulty || 0] || "text-gray-400";
-  };
+  const getDifficultyLabel = useCallback(
+    (difficulty?: number) => {
+      return difficultyConfig.labels[difficulty || 0] || "Unknown";
+    },
+    [difficultyConfig.labels]
+  );
+
+  const getDifficultyColor = useCallback(
+    (difficulty?: number) => {
+      return difficultyConfig.colors[difficulty || 0] || "text-gray-400";
+    },
+    [difficultyConfig.colors]
+  );
 
   const generateFlashcard = async (questionId: string) => {
     if (!currentUser) {
@@ -171,7 +176,6 @@ export default function QuizReviewPage() {
         throw new Error(data.error || "Failed to create flashcard");
       }
     } catch (error) {
-      console.error("Error creating flashcard:", error);
       setFlashcardStates((prev) => ({ ...prev, [questionId]: "idle" }));
       toast.error(
         error instanceof Error ? error.message : "Failed to create flashcard"
@@ -302,20 +306,16 @@ export default function QuizReviewPage() {
 
           {reviewData.questions.map((question, index) => {
             const isCorrect = question.user_answer?.is_correct ?? false;
-            const correctOption = question.question_options.find(
-              (opt) => opt.is_correct
-            );
-            const userSelectedOption = question.question_options.find(
-              (opt) =>
-                opt.option_id === question.user_answer?.selected_option_id
-            );
 
             return (
               <motion.div
                 key={question.question_id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+                transition={{
+                  delay: Math.min(index * 0.05, 0.3), // OPTIMIZED: Reduced delay and capped
+                  duration: 0.3,
+                }}
               >
                 <Card className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 border-gray-700/50 p-6 shadow-lg hover:shadow-xl transition-all duration-300">
                   {/* Question Header */}
@@ -433,16 +433,12 @@ export default function QuizReviewPage() {
                         question.user_answer?.selected_option_id;
                       const isCorrectOption = option.is_correct;
 
-                      let optionStyle = "border-gray-600 bg-gray-700/30";
-                      let iconColor = "text-gray-400";
-
-                      if (isCorrectOption) {
-                        optionStyle = "border-green-500 bg-green-500/20";
-                        iconColor = "text-green-500";
-                      } else if (isUserSelected && !isCorrectOption) {
-                        optionStyle = "border-red-500 bg-red-500/20";
-                        iconColor = "text-red-500";
-                      }
+                      // OPTIMIZED: Simplified styling logic
+                      const optionStyle = isCorrectOption
+                        ? "border-green-500 bg-green-500/20"
+                        : isUserSelected && !isCorrectOption
+                          ? "border-red-500 bg-red-500/20"
+                          : "border-gray-600 bg-gray-700/30";
 
                       return (
                         <div

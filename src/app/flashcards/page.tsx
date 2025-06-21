@@ -172,16 +172,17 @@ const TopicCard = ({
   );
 };
 
-// Flashcard component with 3D flip animation
+// OPTIMIZED: Flashcard component with reduced re-renders
 const FlashCard = ({ flashcard, index }: FlashCardProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
-  // Detect touch device on mount
-  useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
-  }, []);
+  // OPTIMIZED: Calculate touch device once and memoize
+  const [isTouchDevice] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+  );
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
@@ -371,105 +372,115 @@ export default function FlashcardsPage() {
 
   const router = useRouter();
 
-  // Group flashcards by topic and create topic stats
-  const { topicStats, selectedTopicFlashcards, selectedTopicName } =
-    useMemo(() => {
-      if (!flashcards)
-        return {
-          topicStats: [],
-          selectedTopicFlashcards: [],
-          selectedTopicName: "",
-        };
-
-      // Group flashcards by topic
-      const topicGroups = new Map<string, FlashcardWithTopic[]>();
-
-      flashcards.forEach((flashcard) => {
-        const topicId = flashcard.topic_id || "general";
-        if (!topicGroups.has(topicId)) {
-          topicGroups.set(topicId, []);
-        }
-        topicGroups.get(topicId)!.push(flashcard);
-      });
-
-      // Create topic stats with progress breakdown
-      const stats = Array.from(topicGroups.entries())
-        .map(([topicId, cards]) => {
-          // Calculate progress for this topic
-          const progress = cards.reduce(
-            (acc, card) => {
-              acc.total++;
-              switch (card.mastery_status) {
-                case "learning":
-                  acc.learning++;
-                  break;
-                case "under_review":
-                  acc.under_review++;
-                  break;
-                case "mastered":
-                  acc.mastered++;
-                  break;
-              }
-              return acc;
-            },
-            { learning: 0, under_review: 0, mastered: 0, total: 0 }
-          );
-
-          return {
-            topicId,
-            topicName: cards[0]?.topic?.name || "General",
-            count: cards.length,
-            flashcards: cards,
-            progress,
-          };
-        })
-        .sort((a, b) => b.count - a.count); // Sort by count descending
-
-      // Get selected topic's flashcards
-      const selectedCards = selectedTopicId
-        ? topicGroups.get(selectedTopicId) || []
-        : [];
-      const selectedName = selectedTopicId
-        ? stats.find((s) => s.topicId === selectedTopicId)?.topicName || ""
-        : "";
-
-      return {
-        topicStats: stats,
-        selectedTopicFlashcards: selectedCards,
-        selectedTopicName: selectedName,
-      };
-    }, [flashcards, selectedTopicId]);
-
-  // Calculate overall progress statistics
-  const overallProgress = useMemo(() => {
+  // OPTIMIZED: Combined topic stats and overall progress calculation
+  const {
+    topicStats,
+    selectedTopicFlashcards,
+    selectedTopicName,
+    overallProgress,
+  } = useMemo(() => {
     if (!flashcards)
-      return { learning: 0, under_review: 0, mastered: 0, total: 0 };
+      return {
+        topicStats: [],
+        selectedTopicFlashcards: [],
+        selectedTopicName: "",
+        overallProgress: {
+          learning: 0,
+          under_review: 0,
+          mastered: 0,
+          total: 0,
+        },
+      };
 
-    const progress = flashcards.reduce(
-      (acc, flashcard) => {
-        acc.total++;
-        switch (flashcard.mastery_status) {
-          case "learning":
-            acc.learning++;
-            break;
-          case "under_review":
-            acc.under_review++;
-            break;
-          case "mastered":
-            acc.mastered++;
-            break;
-        }
-        return acc;
-      },
-      { learning: 0, under_review: 0, mastered: 0, total: 0 }
-    );
+    // Group flashcards by topic and calculate overall progress in one pass
+    const topicGroups = new Map<string, FlashcardWithTopic[]>();
+    const overallProgress = {
+      learning: 0,
+      under_review: 0,
+      mastered: 0,
+      total: 0,
+    };
 
-    return progress;
-  }, [flashcards]);
+    flashcards.forEach((flashcard) => {
+      const topicId = flashcard.topic_id || "general";
 
+      // Group by topic
+      if (!topicGroups.has(topicId)) {
+        topicGroups.set(topicId, []);
+      }
+      topicGroups.get(topicId)!.push(flashcard);
+
+      // Calculate overall progress
+      overallProgress.total++;
+      switch (flashcard.mastery_status) {
+        case "learning":
+          overallProgress.learning++;
+          break;
+        case "under_review":
+          overallProgress.under_review++;
+          break;
+        case "mastered":
+          overallProgress.mastered++;
+          break;
+      }
+    });
+
+    // Create topic stats with progress breakdown
+    const stats = Array.from(topicGroups.entries())
+      .map(([topicId, cards]) => {
+        // Calculate progress for this topic
+        const progress = cards.reduce(
+          (acc, card) => {
+            acc.total++;
+            switch (card.mastery_status) {
+              case "learning":
+                acc.learning++;
+                break;
+              case "under_review":
+                acc.under_review++;
+                break;
+              case "mastered":
+                acc.mastered++;
+                break;
+            }
+            return acc;
+          },
+          { learning: 0, under_review: 0, mastered: 0, total: 0 }
+        );
+
+        return {
+          topicId,
+          topicName: cards[0]?.topic?.name || "General",
+          count: cards.length,
+          flashcards: cards,
+          progress,
+        };
+      })
+      .sort((a, b) => b.count - a.count); // Sort by count descending
+
+    // Get selected topic's flashcards
+    const selectedCards = selectedTopicId
+      ? topicGroups.get(selectedTopicId) || []
+      : [];
+    const selectedName = selectedTopicId
+      ? stats.find((s) => s.topicId === selectedTopicId)?.topicName || ""
+      : "";
+
+    return {
+      topicStats: stats,
+      selectedTopicFlashcards: selectedCards,
+      selectedTopicName: selectedName,
+      overallProgress,
+    };
+  }, [flashcards, selectedTopicId]);
+
+  // OPTIMIZED: Only inject CSS once on mount, remove debug logs
   useEffect(() => {
-    // Add CSS for 3D perspective to document head
+    // Check if CSS is already injected
+    if (document.querySelector("#flashcard-3d-styles")) return;
+
     const style = document.createElement("style");
+    style.id = "flashcard-3d-styles";
     style.innerHTML = `
       .perspective-1000 {
         perspective: 1000px;
@@ -483,23 +494,13 @@ export default function FlashcardsPage() {
     `;
     document.head.appendChild(style);
 
-    if (user) {
-      console.log("Auth User ID (Supabase):", user.id);
-    }
-
-    if (currentUser) {
-      console.log("Database User ID:", currentUser.user_id);
-    }
-
-    if (flashcards) {
-      console.log("Fetched flashcards for user:", currentUser?.user_id);
-      console.log("Total flashcards:", flashcards.length);
-    }
-
     return () => {
-      document.head.removeChild(style);
+      const existingStyle = document.querySelector("#flashcard-3d-styles");
+      if (existingStyle) {
+        document.head.removeChild(existingStyle);
+      }
     };
-  }, [flashcards, user, currentUser]);
+  }, []); // Only run once on mount
 
   // Add visibility change listener to refetch data when user comes back from study session
   useEffect(() => {
@@ -516,8 +517,11 @@ export default function FlashcardsPage() {
     };
   }, [currentUser?.user_id, refetchFlashcards]);
 
-  // Show loading state while auth user or database user is loading
-  if (loading || userLoading || !user) {
+  // FIXED: Proper loading state handling to prevent flickering
+  // Show loading state while auth user, database user, or flashcards are loading
+  const isLoading = loading || userLoading || !user || isLoadingFlashcards;
+
+  if (isLoading) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center mt-14 sm:mt-16 md:mt-20">
@@ -669,7 +673,7 @@ export default function FlashcardsPage() {
           )}
 
           {/* Topics Grid */}
-          {topicStats.length === 0 ? (
+          {topicStats.length === 0 && flashcards && flashcards.length === 0 ? (
             <motion.div
               className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 sm:p-8 text-center my-6 sm:my-8"
               initial={{ opacity: 0, y: 20 }}
@@ -755,7 +759,7 @@ export default function FlashcardsPage() {
         </div>
 
         {/* Flashcards Grid */}
-        {selectedTopicFlashcards.length === 0 ? (
+        {selectedTopicFlashcards.length === 0 && flashcards ? (
           <motion.div
             className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 sm:p-8 text-center my-6 sm:my-8"
             initial={{ opacity: 0, y: 20 }}

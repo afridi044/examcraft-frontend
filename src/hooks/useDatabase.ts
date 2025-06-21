@@ -346,6 +346,8 @@ export function useUserFlashcards(userId: string) {
     staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
     refetchOnWindowFocus: true, // Refetch when window gains focus (when navigating back)
     refetchOnMount: true, // Always refetch on mount
+    // FIXED: Return loading state when userId is not available
+    placeholderData: undefined, // Don't use placeholder data to maintain proper loading state
   });
 }
 
@@ -466,9 +468,12 @@ export function useDashboardStats(userId: string) {
     queryFn: () => db.analytics.getDashboardStats(userId),
     select: (response) => response.data,
     enabled: !!userId,
-    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
-    refetchOnWindowFocus: true, // Refetch when window gains focus
-    refetchOnMount: true, // Always refetch on mount
+    staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time for dashboard stats
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
+    refetchOnMount: false, // Only refetch when data is stale
+    retry: 1, // Reduce retries for faster failure handling
+    refetchInterval: false, // No automatic refetching
   });
 }
 
@@ -478,9 +483,12 @@ export function useRecentActivity(userId: string, limit: number = 10) {
     queryFn: () => db.analytics.getRecentActivity(userId, limit),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
-    refetchOnWindowFocus: true, // Refetch when window gains focus
-    refetchOnMount: true, // Always refetch on mount
+    staleTime: 3 * 60 * 1000, // 3 minutes - longer stale time for activity
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
+    refetchOnMount: false, // Only refetch when data is stale
+    retry: 1, // Reduce retries for faster failure handling
+    refetchInterval: false, // No automatic refetching
   });
 }
 
@@ -491,6 +499,11 @@ export function useTopicProgress(userId: string) {
     select: (response) => response.data || [],
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
+    refetchOnMount: false, // Only refetch when data is stale
+    retry: 1, // Reduce retries for faster failure handling
+    refetchInterval: false, // No automatic refetching
   });
 }
 

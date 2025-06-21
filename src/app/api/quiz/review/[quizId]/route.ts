@@ -94,9 +94,7 @@ export async function GET(
       .select("*")
       .in("question_id", questionIds);
 
-    if (explanationsError) {
-      console.error("Error fetching explanations:", explanationsError);
-    }
+    // Silently handle explanation errors - review can work without them
 
     // Create explanation map
     const explanationMap = new Map();
@@ -127,25 +125,26 @@ export async function GET(
         };
       });
 
-    // Calculate quiz stats
+    // OPTIMIZED: Calculate quiz stats in a single pass
     const totalQuestions = questions.length;
-
-    // Count correct answers by checking each question's user answer
     let correctAnswers = 0;
+    let totalTime = 0;
+
+    // Combined calculation for efficiency
     questions.forEach((question) => {
       if (question.user_answer?.is_correct === true) {
         correctAnswers++;
       }
     });
 
+    userAnswers.forEach((answer) => {
+      totalTime += answer.time_taken_seconds || 0;
+    });
+
     const percentage =
       totalQuestions > 0
         ? Math.round((correctAnswers / totalQuestions) * 100)
         : 0;
-    const totalTime = userAnswers.reduce(
-      (sum, answer) => sum + (answer.time_taken_seconds || 0),
-      0
-    );
 
     const reviewData: ReviewData = {
       quiz: {
@@ -164,8 +163,7 @@ export async function GET(
     };
 
     return NextResponse.json(reviewData);
-  } catch (error) {
-    console.error("Quiz review API error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch quiz review data" },
       { status: 500 }

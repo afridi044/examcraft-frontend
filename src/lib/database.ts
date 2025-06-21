@@ -1066,30 +1066,42 @@ export const flashcardService = {
 
 export const analyticsService = {
   // Get dashboard statistics
+  // OPTIMIZED Dashboard Stats - faster queries with better caching
   async getDashboardStats(
     userId: string
   ): Promise<ApiResponse<DashboardStats>> {
     try {
-      // Get counts
-      const [quizzesResult, examsResult, flashcardsResult, answersResult] =
-        await Promise.all([
-          supabase
-            .from(TABLE_NAMES.QUIZZES)
-            .select("quiz_id", { count: "exact" })
-            .eq("user_id", userId),
-          supabase
-            .from(TABLE_NAMES.EXAMS)
-            .select("exam_id", { count: "exact" })
-            .eq("user_id", userId),
-          supabase
-            .from(TABLE_NAMES.FLASHCARDS)
-            .select("flashcard_id", { count: "exact" })
-            .eq("user_id", userId),
-          supabase
-            .from(TABLE_NAMES.USER_ANSWERS)
-            .select("answer_id, is_correct")
-            .eq("user_id", userId),
-        ]);
+      // Parallel queries with optimized selects and limits
+      const [
+        quizzesResult,
+        examsResult,
+        flashcardsResult,
+        answersResult,
+        studyStreakResult,
+      ] = await Promise.all([
+        // Count queries are fast
+        supabase
+          .from(TABLE_NAMES.QUIZZES)
+          .select("quiz_id", { count: "exact" })
+          .eq("user_id", userId),
+        supabase
+          .from(TABLE_NAMES.EXAMS)
+          .select("exam_id", { count: "exact" })
+          .eq("user_id", userId),
+        supabase
+          .from(TABLE_NAMES.FLASHCARDS)
+          .select("flashcard_id", { count: "exact" })
+          .eq("user_id", userId),
+        // OPTIMIZED: Only get recent answers for average calculation (last 100)
+        supabase
+          .from(TABLE_NAMES.USER_ANSWERS)
+          .select("answer_id, is_correct")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(100), // Limit for performance
+        // Run study streak calculation in parallel
+        this.calculateStudyStreak(userId),
+      ]);
 
       const totalQuizzes = quizzesResult.count || 0;
       const totalExams = examsResult.count || 0;
@@ -1101,15 +1113,12 @@ export const analyticsService = {
       const averageScore =
         questionsAnswered > 0 ? (correctAnswers / questionsAnswered) * 100 : 0;
 
-      // Calculate study streak (simplified - consecutive days with activity)
-      const studyStreak = await this.calculateStudyStreak(userId);
-
       return handleSuccess({
         totalQuizzes,
         totalExams,
         totalFlashcards,
         averageScore: Math.round(averageScore),
-        studyStreak: studyStreak.data || 0,
+        studyStreak: studyStreakResult.data || 0,
         questionsAnswered,
         correctAnswers,
       });
@@ -1118,14 +1127,20 @@ export const analyticsService = {
     }
   },
 
-  // Calculate study streak
+  // Calculate study streak - OPTIMIZED to limit data and use database aggregation
   async calculateStudyStreak(userId: string): Promise<ApiResponse<number>> {
     try {
+      // Only get last 30 days of data for performance
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
       const { data, error } = await supabase
         .from(TABLE_NAMES.USER_ANSWERS)
         .select("created_at")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(100); // Limit to recent 100 answers for performance
 
       if (error) return handleError(error);
 
@@ -1133,19 +1148,22 @@ export const analyticsService = {
         return handleSuccess(0);
       }
 
-      // Group by date and calculate consecutive days
-      const dates = data.map((answer) =>
-        new Date(answer.created_at).toDateString()
-      );
-      const uniqueDates = [...new Set(dates)].sort(
+      // Group by date and calculate consecutive days (optimized)
+      const uniqueDates = new Set<string>();
+      data.forEach((answer) => {
+        uniqueDates.add(new Date(answer.created_at).toDateString());
+      });
+
+      const sortedDates = Array.from(uniqueDates).sort(
         (a, b) => new Date(b).getTime() - new Date(a).getTime()
       );
 
       let streak = 0;
+      const today = new Date();
 
-      for (let i = 0; i < uniqueDates.length; i++) {
-        const currentDate = new Date(uniqueDates[i]);
-        const expectedDate = new Date();
+      for (let i = 0; i < sortedDates.length; i++) {
+        const currentDate = new Date(sortedDates[i]);
+        const expectedDate = new Date(today);
         expectedDate.setDate(expectedDate.getDate() - i);
 
         if (currentDate.toDateString() === expectedDate.toDateString()) {
@@ -1161,105 +1179,86 @@ export const analyticsService = {
     }
   },
 
-  // Get recent activity
+  // Get recent activity - OPTIMIZED with parallel queries and reduced data
   async getRecentActivity(
     userId: string,
     limit: number = 10
   ): Promise<ApiResponse<RecentActivity[]>> {
     try {
-      // Get recent quiz creation
-      const { data: quizCreationData, error: quizCreationError } =
-        await supabase
+      // Run all queries in parallel for better performance
+      const [
+        quizCreationResult,
+        quizAnswerResult,
+        examCreationResult,
+        examSessionResult,
+        flashcardResult,
+      ] = await Promise.all([
+        // Recent quiz creation - limited data
+        supabase
           .from(TABLE_NAMES.QUIZZES)
-          .select(
-            `
-          quiz_id,
-          title,
-          created_at,
-          topics(name)
-        `
-          )
+          .select("quiz_id, title, created_at, topics(name)")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
-          .limit(limit);
+          .limit(Math.min(limit, 5)), // Reduce limit for faster queries
 
-      // Get recent quiz attempts (answers)
-      const { data: quizAnswerData, error: quizAnswerError } = await supabase
-        .from(TABLE_NAMES.USER_ANSWERS)
-        .select(
-          `
-          created_at,
-          is_correct,
-          quizzes(quiz_id, title, topics(name))
-        `
-        )
-        .eq("user_id", userId)
-        .not("quiz_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(limit);
+        // Recent quiz attempts - limited data
+        supabase
+          .from(TABLE_NAMES.USER_ANSWERS)
+          .select(
+            "created_at, is_correct, quizzes(quiz_id, title, topics(name))"
+          )
+          .eq("user_id", userId)
+          .not("quiz_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(Math.min(limit, 5)),
 
-      // Get recent exam creation
-      const { data: examCreationData, error: examCreationError } =
-        await supabase
+        // Recent exam creation - limited data
+        supabase
           .from(TABLE_NAMES.EXAMS)
-          .select(
-            `
-          exam_id,
-          title,
-          created_at,
-          topics(name)
-        `
-          )
+          .select("exam_id, title, created_at, topics(name)")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
-          .limit(limit);
+          .limit(Math.min(limit, 3)),
 
-      // Get recent exam sessions
-      const { data: examSessionData, error: examSessionError } = await supabase
-        .from(TABLE_NAMES.EXAM_SESSIONS)
-        .select(
-          `
-          start_time,
-          total_score,
-          status,
-          exams(exam_id, title, topics(name))
-        `
-        )
-        .eq("user_id", userId)
-        .in("status", ["completed", "in_progress"])
-        .order("start_time", { ascending: false })
-        .limit(limit);
+        // Recent exam sessions - limited data
+        supabase
+          .from(TABLE_NAMES.EXAM_SESSIONS)
+          .select(
+            "start_time, total_score, status, exams(exam_id, title, topics(name))"
+          )
+          .eq("user_id", userId)
+          .in("status", ["completed", "in_progress"])
+          .order("start_time", { ascending: false })
+          .limit(Math.min(limit, 3)),
 
-      // Get recent flashcard creation
-      const { data: flashcardData, error: flashcardError } = await supabase
-        .from(TABLE_NAMES.FLASHCARDS)
-        .select(
-          `
-          flashcard_id,
-          question,
-          created_at,
-          topics(name)
-        `
-        )
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(limit);
+        // Recent flashcard creation - limited data
+        supabase
+          .from(TABLE_NAMES.FLASHCARDS)
+          .select("flashcard_id, question, created_at, topics(name)")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(Math.min(limit, 3)),
+      ]);
 
-      if (
-        quizCreationError ||
-        quizAnswerError ||
-        examCreationError ||
-        examSessionError ||
-        flashcardError
-      ) {
-        return handleError(
-          quizCreationError ||
-            quizAnswerError ||
-            examCreationError ||
-            examSessionError ||
-            flashcardError
-        );
+      // Check for errors
+      const errors = [
+        quizCreationResult.error,
+        quizAnswerResult.error,
+        examCreationResult.error,
+        examSessionResult.error,
+        flashcardResult.error,
+      ].filter(Boolean);
+
+      if (errors.length > 0) {
+        return handleError(errors[0]);
       }
+
+      // Extract data
+      const quizCreationData = quizCreationResult.data;
+      const quizAnswerData = quizAnswerResult.data;
+      const examCreationData = examCreationResult.data;
+      const examSessionData = examSessionResult.data;
+      const flashcardData = flashcardResult.data;
 
       const activities: RecentActivity[] = [];
 

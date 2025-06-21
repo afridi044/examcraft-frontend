@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentUser, useQuizWithQuestions } from "@/hooks/useDatabase";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Clock,
   CheckCircle,
@@ -45,15 +45,7 @@ export default function TakeQuizPage() {
   const { user } = useAuth();
   const { data: currentUser } = useCurrentUser();
 
-  // Debug user ID
-  useEffect(() => {
-    if (currentUser) {
-      console.log("=== CURRENT USER DEBUG ===");
-      console.log("Full user object:", currentUser);
-      console.log("Database user_id:", currentUser.user_id);
-      console.log("Supabase auth ID:", currentUser.supabase_auth_id);
-    }
-  }, [currentUser]);
+  // OPTIMIZED: Removed debug logging for performance
   const { data: quiz, isLoading } = useQuizWithQuestions(quizId);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -66,19 +58,45 @@ export default function TakeQuizPage() {
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
 
-  const questions = quiz?.quiz_questions?.map((qq) => qq.questions) || [];
-  const currentQuestion = questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === questions.length - 1;
-  const hasAnsweredCurrent = userAnswers.has(
-    currentQuestion?.question_id || ""
-  );
+  // OPTIMIZED: Memoized derived values
+  const {
+    questions,
+    currentQuestion,
+    isLastQuestion,
+    hasAnsweredCurrent,
+    progressPercentage,
+  } = useMemo(() => {
+    const questions = quiz?.quiz_questions?.map((qq) => qq.questions) || [];
+    const currentQuestion = questions[currentQuestionIndex];
+    const isLastQuestion = currentQuestionIndex === questions.length - 1;
+    const hasAnsweredCurrent = userAnswers.has(
+      currentQuestion?.question_id || ""
+    );
+    const progressPercentage =
+      questions.length > 0
+        ? ((currentQuestionIndex + 1) / questions.length) * 100
+        : 0;
 
-  // Timer effect
+    return {
+      questions,
+      currentQuestion,
+      isLastQuestion,
+      hasAnsweredCurrent,
+      progressPercentage,
+    };
+  }, [quiz?.quiz_questions, currentQuestionIndex, userAnswers]);
+
+  // OPTIMIZED: Timer with reduced update frequency
   useEffect(() => {
     if (!quizStartTime) return;
 
     const timer = setInterval(() => {
-      setTimeElapsed(Math.floor((Date.now() - quizStartTime.getTime()) / 1000));
+      const newTimeElapsed = Math.floor(
+        (Date.now() - quizStartTime.getTime()) / 1000
+      );
+      setTimeElapsed((prev) =>
+        prev !== newTimeElapsed ? newTimeElapsed : prev
+      );
     }, 1000);
 
     return () => clearInterval(timer);
@@ -97,11 +115,12 @@ export default function TakeQuizPage() {
     setQuestionStartTime(new Date());
   }, [currentQuestionIndex]);
 
-  const formatTime = (seconds: number) => {
+  // OPTIMIZED: Memoized time formatting
+  const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
   const handleAnswerSelect = useCallback(
     (optionId: string, textAnswer?: string) => {
@@ -161,24 +180,18 @@ export default function TakeQuizPage() {
         (Date.now() - quizStartTime.getTime()) / 1000
       );
 
-      // Submit all answers to database
-      console.log("Submitting quiz answers for user:", currentUser.user_id);
-      console.log("Quiz ID:", quizId);
-      console.log("Total answers to submit:", userAnswers.size);
-
-      for (const answer of userAnswers.values()) {
-        try {
+      // OPTIMIZED: Batch submit answers with minimal logging
+      const submitPromises = Array.from(userAnswers.values()).map(
+        async (answer) => {
           const payload = {
             user_id: currentUser.user_id,
             question_id: answer.question_id,
             quiz_id: quizId,
-            selected_option_id: answer.selected_option_id || null, // Convert empty string to null
-            text_answer: answer.text_answer || null, // Convert empty string to null
+            selected_option_id: answer.selected_option_id || null,
+            text_answer: answer.text_answer || null,
             is_correct: answer.is_correct,
             time_taken_seconds: answer.time_taken_seconds,
           };
-
-          console.log("Submitting answer:", payload);
 
           const response = await fetch("/api/quiz/submit-answer", {
             method: "POST",
@@ -186,22 +199,18 @@ export default function TakeQuizPage() {
             body: JSON.stringify(payload),
           });
 
-          const result = await response.json();
-          console.log("Submit response:", response.status, result);
-
           if (!response.ok) {
-            console.error("Failed to submit answer:", result);
-            console.error("Error details:", result.error);
-          } else {
-            console.log(
-              "Answer submitted successfully:",
-              result.answer?.answer_id
+            throw new Error(
+              `Failed to submit answer for question ${answer.question_id}`
             );
           }
-        } catch (error) {
-          console.error("Failed to submit answer:", error);
+
+          return response.json();
         }
-      }
+      );
+
+      // Wait for all submissions to complete
+      await Promise.all(submitPromises);
 
       const result: QuizResult = {
         score,
@@ -215,8 +224,9 @@ export default function TakeQuizPage() {
       setQuizResult(result);
       toast.success("Quiz completed successfully!");
     } catch (error) {
-      console.error("Quiz submission error:", error);
-      toast.error("Failed to submit quiz");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to submit quiz"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -367,92 +377,87 @@ export default function TakeQuizPage() {
         <div className="w-full bg-gray-700 rounded-full h-2">
           <div
             className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-            style={{
-              width: `${((currentQuestionIndex + 1) / questions.length) * 100}%`,
-            }}
+            style={{ width: `${progressPercentage}%` }}
           />
         </div>
 
-        {/* Question Card */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentQuestionIndex}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="bg-gray-800/50 border-gray-700/50 p-8">
-              <div className="space-y-6">
-                {/* Question */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                      <BookOpen className="h-4 w-4 text-white" />
-                    </div>
-                    <h2 className="text-xl font-bold text-white">
-                      Question {currentQuestionIndex + 1}
-                    </h2>
+        {/* Question Card - OPTIMIZED: Simplified animation */}
+        <motion.div
+          key={currentQuestionIndex}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Card className="bg-gray-800/50 border-gray-700/50 p-8">
+            <div className="space-y-6">
+              {/* Question */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                    <BookOpen className="h-4 w-4 text-white" />
                   </div>
-                  <p className="text-lg text-gray-200 leading-relaxed">
-                    {currentQuestion?.content}
-                  </p>
+                  <h2 className="text-xl font-bold text-white">
+                    Question {currentQuestionIndex + 1}
+                  </h2>
                 </div>
-
-                {/* Answer Options */}
-                <div className="space-y-3">
-                  {currentQuestion?.question_type === "fill-in-blank" ? (
-                    <div className="space-y-2">
-                      <label className="text-gray-300">Your Answer:</label>
-                      <input
-                        type="text"
-                        value={
-                          userAnswers.get(currentQuestion.question_id)
-                            ?.text_answer || ""
-                        }
-                        onChange={(e) => handleAnswerSelect("", e.target.value)}
-                        placeholder="Type your answer here..."
-                        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400"
-                      />
-                    </div>
-                  ) : (
-                    currentQuestion?.question_options?.map((option, index) => {
-                      const isSelected =
-                        userAnswers.get(currentQuestion.question_id)
-                          ?.selected_option_id === option.option_id;
-                      return (
-                        <button
-                          key={option.option_id}
-                          onClick={() => handleAnswerSelect(option.option_id)}
-                          className={`w-full p-4 text-left rounded-lg border transition-all ${
-                            isSelected
-                              ? "border-purple-500 bg-purple-500/20 text-purple-300"
-                              : "border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500 hover:bg-gray-700/70"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div
-                              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                isSelected
-                                  ? "border-purple-500 bg-purple-500"
-                                  : "border-gray-500"
-                              }`}
-                            >
-                              {isSelected && (
-                                <CheckCircle className="h-4 w-4 text-white" />
-                              )}
-                            </div>
-                            <span>{option.content}</span>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
+                <p className="text-lg text-gray-200 leading-relaxed">
+                  {currentQuestion?.content}
+                </p>
               </div>
-            </Card>
-          </motion.div>
-        </AnimatePresence>
+
+              {/* Answer Options */}
+              <div className="space-y-3">
+                {currentQuestion?.question_type === "fill-in-blank" ? (
+                  <div className="space-y-2">
+                    <label className="text-gray-300">Your Answer:</label>
+                    <input
+                      type="text"
+                      value={
+                        userAnswers.get(currentQuestion.question_id)
+                          ?.text_answer || ""
+                      }
+                      onChange={(e) => handleAnswerSelect("", e.target.value)}
+                      placeholder="Type your answer here..."
+                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400"
+                    />
+                  </div>
+                ) : (
+                  currentQuestion?.question_options?.map((option, index) => {
+                    const isSelected =
+                      userAnswers.get(currentQuestion.question_id)
+                        ?.selected_option_id === option.option_id;
+                    return (
+                      <button
+                        key={option.option_id}
+                        onClick={() => handleAnswerSelect(option.option_id)}
+                        className={`w-full p-4 text-left rounded-lg border transition-all ${
+                          isSelected
+                            ? "border-purple-500 bg-purple-500/20 text-purple-300"
+                            : "border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500 hover:bg-gray-700/70"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                              isSelected
+                                ? "border-purple-500 bg-purple-500"
+                                : "border-gray-500"
+                            }`}
+                          >
+                            {isSelected && (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            )}
+                          </div>
+                          <span>{option.content}</span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </Card>
+        </motion.div>
 
         {/* Navigation */}
         <div className="flex items-center justify-between">
@@ -467,21 +472,26 @@ export default function TakeQuizPage() {
           </Button>
 
           <div className="flex space-x-2">
-            {questions.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentQuestionIndex(index)}
-                className={`w-8 h-8 rounded-full text-sm transition-all ${
-                  index === currentQuestionIndex
-                    ? "bg-purple-500 text-white"
-                    : userAnswers.has(questions[index]?.question_id || "")
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-700 text-gray-400 hover:bg-gray-600"
-                }`}
-              >
-                {index + 1}
-              </button>
-            ))}
+            {questions.map((question, index) => {
+              const isAnswered = userAnswers.has(question?.question_id || "");
+              const isCurrent = index === currentQuestionIndex;
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => setCurrentQuestionIndex(index)}
+                  className={`w-8 h-8 rounded-full text-sm transition-all ${
+                    isCurrent
+                      ? "bg-purple-500 text-white"
+                      : isAnswered
+                        ? "bg-green-500 text-white"
+                        : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
           </div>
 
           {isLastQuestion ? (

@@ -12,9 +12,12 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session - only once
+    // Get initial session - only once, with minimal delay for faster page loads
     const initializeAuth = async () => {
       try {
+        // Small delay to let the page render first
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -71,13 +74,13 @@ export function useAuth() {
 
       if (error) throw error;
 
+      setLoading(false); // Set loading false for sign-up since it doesn't auto-sign in
       return { data, error: null };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Signup failed";
-      return { data: null, error: errorMessage };
-    } finally {
       setLoading(false);
+      return { data: null, error: errorMessage };
     }
   };
 
@@ -92,13 +95,14 @@ export function useAuth() {
 
       if (error) throw error;
 
+      // Don't set loading to false here - let the auth state change handle it
+      // This prevents double loading state changes
       return { data, error: null };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Sign in failed";
+      setLoading(false); // Only set loading false on error
       return { data: null, error: errorMessage };
-    } finally {
-      setLoading(false);
     }
   };
 
