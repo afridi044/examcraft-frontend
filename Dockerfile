@@ -1,69 +1,94 @@
-# Use the official Node.js 18 Alpine image as base
-FROM node:18-alpine AS base
+# =============================================================================
+# ExamCraft Frontend - Production Dockerfile
+# =============================================================================
+# This multi-stage Dockerfile optimizes for production deployment with:
+# - Minimal final image size using Alpine Linux
+# - Security best practices (non-root user)
+# - Layer caching optimization
+# - Next.js standalone output for reduced dependencies
+# =============================================================================
 
-# Install dependencies only when needed
+# -----------------------------------------------------------------------------
+# Stage 1: Base image with Node.js
+# -----------------------------------------------------------------------------
+FROM node:20.11.1-alpine AS base
+
+# Install security updates and dependencies needed for node-gyp
+RUN apk update && apk upgrade && \
+    apk add --no-cache libc6-compat dumb-init && \
+    rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# -----------------------------------------------------------------------------
+# Stage 2: Install dependencies
+# -----------------------------------------------------------------------------
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+# Copy package files
+COPY package.json package-lock.json* ./
 
-# Rebuild the source code only when needed
+# Install dependencies with npm ci for faster, reliable, reproducible builds
+RUN npm ci --frozen-lockfile && \
+    npm cache clean --force
+
+# -----------------------------------------------------------------------------
+# Stage 3: Build the application
+# -----------------------------------------------------------------------------
 FROM base AS builder
-WORKDIR /app
+
+# Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
 COPY . .
 
-# Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
-ENV NEXT_TELEMETRY_DISABLED 1
+# Set build-time environment variables
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
 
-# Build the application
-RUN \
-  if [ -f yarn.lock ]; then yarn run build; \
-  elif [ -f package-lock.json ]; then npm run build; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+# Install all dependencies (including devDependencies for build)
+RUN npm ci --frozen-lockfile
 
-# Production image, copy all the files and run next
+# Build the Next.js application
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 4: Production runtime
+# -----------------------------------------------------------------------------
 FROM base AS runner
-WORKDIR /app
 
-ENV NODE_ENV production
-# Uncomment the following line in case you want to disable telemetry during runtime.
-ENV NEXT_TELEMETRY_DISABLED 1
+# Set production environment
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME="0.0.0.0"
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
+# Copy built application from builder stage
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Create .next directory with proper permissions
+RUN mkdir -p .next && chown nextjs:nodejs .next
+
+# Switch to non-root user
 USER nextjs
 
+# Expose port
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+# Health check to ensure container is healthy
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node healthcheck.js || exit 1
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
-CMD ["node", "server.js"]
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "server.js"] 

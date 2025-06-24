@@ -1,0 +1,56 @@
+name: Docker CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: sajidnoor5051/sajid_private_repo:examcraft-v2
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          script: |
+            cd examcraft
+            docker pull sajidnoor5051/sajid_private_repo:examcraft-v2
+            docker stop examcraft || true
+            docker rm examcraft || true
+            docker run -d \
+              --name examcraft \
+              -p 80:3000 \
+              --restart unless-stopped \
+              --dns 8.8.8.8 \
+              --dns 8.8.4.4 \
+              --env-file .env.production \
+              sajidnoor5051/sajid_private_repo:examcraft-v2

@@ -6,7 +6,18 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docker:build": "./scripts/docker-build.sh",
+    "docker:build:dev": "./scripts/docker-build.sh -e dev",
+    "docker:build:prod": "./scripts/docker-build.sh -e prod",
+    "docker:build:push": "./scripts/docker-build.sh -p",
+    "docker:deploy": "./scripts/docker-deploy.sh deploy",
+    "docker:deploy:dev": "./scripts/docker-deploy.sh -e dev deploy",
+    "docker:deploy:prod": "./scripts/docker-deploy.sh -e prod deploy",
+    "docker:stop": "./scripts/docker-deploy.sh stop",
+    "docker:restart": "./scripts/docker-deploy.sh restart",
+    "docker:logs": "./scripts/docker-deploy.sh logs",
+    "docker:status": "./scripts/docker-deploy.sh status"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
