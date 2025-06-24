@@ -1,97 +1,169 @@
-# Dependencies
-node_modules
+# =============================================================================
+# ExamCraft Frontend - Docker Ignore File
+# =============================================================================
+# This file excludes unnecessary files from Docker build context to:
+# - Reduce build context size
+# - Improve build performance
+# - Prevent sensitive files from being copied
+# - Follow Next.js best practices
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Node.js Dependencies
+# -----------------------------------------------------------------------------
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Local environment files
+# -----------------------------------------------------------------------------
+# Next.js Build Output
+# -----------------------------------------------------------------------------
+.next/
+out/
+build/
+dist/
+
+# -----------------------------------------------------------------------------
+# Environment Files (Keep .env.example for documentation)
+# -----------------------------------------------------------------------------
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.docker
 
-# Next.js build output
-.next
-out
+# -----------------------------------------------------------------------------
+# Git and Version Control
+# -----------------------------------------------------------------------------
+.git/
+.gitignore
+.gitattributes
+.github/
 
-# TypeScript build cache
-*.tsbuildinfo
-next-env.d.ts
+# -----------------------------------------------------------------------------
+# IDE and Editor Files
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Production
-/build
-
-# Misc
+# -----------------------------------------------------------------------------
+# OS Generated Files
+# -----------------------------------------------------------------------------
 .DS_Store
-*.pem
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Debug
+# -----------------------------------------------------------------------------
+# Testing and Coverage
+# -----------------------------------------------------------------------------
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
-# Local IDE files
-.vscode
-.idea
-*.swp
-*.swo
+# -----------------------------------------------------------------------------
+# Runtime Data
+# -----------------------------------------------------------------------------
+pids/
+*.pid
+*.seed
+*.pid.lock
 
-# OS generated files
-Thumbs.db
-
-# Git
-.git
-.gitignore
-
-# Docker
-Dockerfile
+# -----------------------------------------------------------------------------
+# Docker Files (Exclude other Docker files from build context)
+# -----------------------------------------------------------------------------
+Dockerfile*
+docker-compose*.yml
 .dockerignore
 
-# Documentation
+# -----------------------------------------------------------------------------
+# Documentation and Markdown
+# -----------------------------------------------------------------------------
 README.md
-docs/
+CHANGELOG.md
+LICENSE
+*.md
 
-# Test files
-coverage/
-.nyc_output/
+# -----------------------------------------------------------------------------
+# Package Manager Lock Files (Keep package-lock.json for npm)
+# -----------------------------------------------------------------------------
+yarn.lock
+pnpm-lock.yaml
 
-# Cache directories
-.npm
+# -----------------------------------------------------------------------------
+# TypeScript
+# -----------------------------------------------------------------------------
+*.tsbuildinfo
+
+# -----------------------------------------------------------------------------
+# ESLint and Prettier
+# -----------------------------------------------------------------------------
 .eslintcache
+.prettierignore
 
-# Optional npm cache directory
-.npm
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js cache
-.next/
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
+# -----------------------------------------------------------------------------
+# Temporary Files
+# -----------------------------------------------------------------------------
 tmp/
 temp/
+.tmp/
+.temp/
+
+# -----------------------------------------------------------------------------
+# Backup Files
+# -----------------------------------------------------------------------------
+*.bak
+*.backup
+
+# -----------------------------------------------------------------------------
+# Archive Files
+# -----------------------------------------------------------------------------
+*.tar.gz
+*.zip
+*.rar
+
+# -----------------------------------------------------------------------------
+# Supabase (Local development files)
+# -----------------------------------------------------------------------------
+supabase/.branches
+supabase/.temp
+supabase/logs
+
+# -----------------------------------------------------------------------------
+# Deployment and CI/CD
+# -----------------------------------------------------------------------------
+.vercel/
+.netlify/
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# -----------------------------------------------------------------------------
+# Security and Sensitive Files
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+*.crt
+*.p12
+.secrets/
