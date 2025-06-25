@@ -21,6 +21,7 @@ jobs:
           echo "NODE_ENV=development" > .env.docker
           echo "NEXT_TELEMETRY_DISABLED=1" >> .env.docker
           # Add other necessary environment variables here
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       
@@ -39,7 +40,7 @@ jobs:
         run: |
           docker-compose build
 
-      - name: Build with docker-compose
+      - name: Check Docker images
         run: |
           docker images
       
@@ -60,9 +61,14 @@ jobs:
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
           script: |
             cd examcraft
+            # Login to Docker Hub
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+            # Pull the latest image
             docker pull sajidnoor5051/sajid_private_repo:examcraft-v2
+            # Stop and remove existing container
             docker stop examcraft || true
             docker rm examcraft || true
+            # Run new container
             docker run -d \
               --name examcraft \
               -p 80:3000 \
@@ -71,3 +77,5 @@ jobs:
               --dns 8.8.4.4 \
               --env-file .env.production \
               sajidnoor5051/sajid_private_repo:examcraft-v2
+            # Logout for security
+            docker logout
