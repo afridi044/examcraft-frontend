@@ -38,6 +38,10 @@ jobs:
       - name: Build with docker-compose
         run: |
           docker-compose build
+
+      - name: Build with docker-compose
+        run: |
+          docker images
       
       - name: Tag and push to Docker Hub
         run: |
