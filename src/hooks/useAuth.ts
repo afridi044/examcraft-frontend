@@ -12,12 +12,9 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session - only once, with minimal delay for faster page loads
+    // Get initial session - only once, optimized for speed
     const initializeAuth = async () => {
       try {
-        // Small delay to let the page render first
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
         const {
           data: { session },
         } = await supabase.auth.getSession();

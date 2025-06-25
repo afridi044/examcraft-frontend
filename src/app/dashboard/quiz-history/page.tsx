@@ -94,9 +94,9 @@ export default function QuizHistoryPage() {
       return response.json();
     },
     enabled: !!currentUser?.user_id,
-    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
-    refetchOnWindowFocus: true, // Enable refetch when returning to page
-    refetchOnMount: true, // Always refetch when component mounts
+    staleTime: 3 * 60 * 1000, // 3 minutes - reasonable for quiz history
+    refetchOnWindowFocus: false, // Disabled for better performance
+    refetchOnMount: false, // Only refetch when data is stale
   });
 
   // OPTIMIZED: Memoized statistics and filtering calculations
