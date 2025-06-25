@@ -17,7 +17,20 @@ export function useAuth() {
       try {
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
+
+        // Handle refresh token errors
+        if (error && error.message.includes('refresh')) {
+          console.warn('Refresh token error, clearing session:', error);
+          await supabase.auth.signOut();
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+            setInitialized(true);
+          }
+          return;
+        }
 
         if (isMounted) {
           setUser(session?.user ?? null);
@@ -26,6 +39,12 @@ export function useAuth() {
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
+        // Clear potentially corrupted session
+        try {
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          console.error("Error clearing session:", signOutError);
+        }
         if (isMounted) {
           setUser(null);
           setLoading(false);
@@ -42,8 +61,24 @@ export function useAuth() {
     // Listen for auth changes - but keep it simple
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (isMounted) {
+        // Handle TOKEN_REFRESH errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.warn('Token refresh failed, signing out');
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        // Handle sign out
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         setUser(session?.user ?? null);
         setLoading(false);
       }
@@ -120,12 +155,41 @@ export function useAuth() {
     }
   };
 
+  // Helper function to clear corrupted auth state
+  const clearAuthState = async () => {
+    try {
+      // Clear localStorage auth data
+      if (typeof window !== 'undefined') {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('sb-') || key.includes('supabase')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+      
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+      
+      // Reset state
+      setUser(null);
+      setLoading(false);
+      
+      return { error: null };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to clear auth state";
+      return { error: errorMessage };
+    }
+  };
+
   return {
     user,
     loading,
     signUp,
     signIn,
     signOut,
+    clearAuthState, // Export the helper function
     isAuthenticated: !!user,
   };
 }
