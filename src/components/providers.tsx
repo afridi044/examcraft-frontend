@@ -21,11 +21,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Optimized for performance - longer stale time, less aggressive refetching
-            staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh longer
-            gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-            refetchOnWindowFocus: false, // Disabled for better performance
-            refetchOnMount: false, // Only refetch when data is stale
+            // With SSR, we usually want to set some default staleTime
+            // above 0 to avoid refetching immediately on the client
+            staleTime: 60 * 1000, // 1 minute
             retry: (failureCount, error) => {
               // Don't retry on 4xx errors
               if (error && typeof error === "object" && "status" in error) {
@@ -34,8 +32,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                   return false;
                 }
               }
-              // Retry up to 2 times for other errors (reduced from 3)
-              return failureCount < 2;
+              // Retry up to 3 times for other errors
+              return failureCount < 3;
             },
           },
           mutations: {

@@ -83,8 +83,8 @@ export function useCurrentUser() {
     queryKey: QUERY_KEYS.currentUser,
     queryFn: () => db.users.getCurrentUser(),
     select: (response) => response.data,
-    staleTime: 10 * 60 * 1000, // 10 minutes - user data changes infrequently
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     retry: 1, // Only retry once to prevent infinite loops
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
@@ -123,7 +123,7 @@ export function useTopics() {
     queryKey: QUERY_KEYS.topics,
     queryFn: () => db.topics.getAllTopics(),
     select: (response) => response.data || [],
-    staleTime: 15 * 60 * 1000, // 15 minutes - topics change rarely
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 }
 
@@ -172,7 +172,7 @@ export function useQuestions(filters?: {
     queryKey: QUERY_KEYS.questions(filters),
     queryFn: () => db.questions.getQuestionsWithOptions(filters),
     select: (response) => response.data || [],
-    staleTime: 10 * 60 * 1000, // 10 minutes - questions change infrequently
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -214,9 +214,9 @@ export function useUserQuizzes(userId: string) {
     queryFn: () => db.quizzes.getUserQuizzes(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - reasonable for user content
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Always refetch when component mounts
   });
 }
 
@@ -236,15 +236,18 @@ export function useCreateQuiz() {
     mutationFn: (data: CreateQuizInput) => db.quizzes.createQuiz(data),
     onSuccess: (response, variables) => {
       if (response.success) {
-        // Only invalidate user-specific queries to avoid unnecessary refetches
+        // Invalidate user quizzes
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.userQuizzes(variables.user_id),
         });
-        // Selectively invalidate dashboard stats only for this user
+        // Invalidate dashboard stats to reflect new quiz count
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.dashboardStats(variables.user_id),
         });
-        // Don't invalidate recent activity immediately - let it update naturally
+        // Invalidate recent activity to show quiz creation
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.recentActivity(variables.user_id),
+        });
       }
     },
   });
@@ -270,17 +273,17 @@ export function useDeleteQuiz() {
 
   return useMutation({
     mutationFn: (quizId: string) => db.quizzes.deleteQuiz(quizId),
-    onSuccess: (response, quizId) => {
+    onSuccess: (response) => {
       if (response.success) {
-        // More targeted invalidation - only invalidate quiz lists, not all related data
-        queryClient.invalidateQueries({ 
-          queryKey: ["quizzes"],
-          type: "all"
-        });
-        // Only invalidate quiz attempts if we have the specific quiz
-        queryClient.removeQueries({ 
-          queryKey: ["quiz", quizId],
-          type: "all"
+        // Invalidate all quiz-related queries
+        queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+        queryClient.invalidateQueries({ queryKey: ["quiz-attempts"] });
+        // Invalidate dashboard stats and activity for all users (we don't have userId here)
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === "dashboardStats" ||
+            query.queryKey[0] === "recentActivity" ||
+            query.queryKey[0] === "topicProgress",
         });
       }
     },
@@ -343,9 +346,10 @@ export function useUserFlashcards(userId: string) {
     queryFn: () => db.flashcards.getUserFlashcards(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - reasonable for user content
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
+    refetchOnWindowFocus: true, // Refetch when window gains focus (when navigating back)
+    refetchOnMount: true, // Always refetch on mount
+    // FIXED: Return loading state when userId is not available
     placeholderData: undefined, // Don't use placeholder data to maintain proper loading state
   });
 }
@@ -356,8 +360,7 @@ export function useFlashcardsDue(userId: string) {
     queryFn: () => db.flashcards.getFlashcardsDueForReview(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes - more frequent for due items
-    refetchInterval: false, // Disabled automatic refetching for better performance
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
   });
 }
 
@@ -391,14 +394,9 @@ export function useUpdateFlashcard() {
       flashcardId: string;
       data: UpdateFlashcardInput;
     }) => db.flashcards.updateFlashcard(flashcardId, data),
-    onSuccess: (response, { flashcardId }) => {
+    onSuccess: (response) => {
       if (response.success) {
-        // More targeted invalidation
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            query.queryKey.includes("flashcards") && 
-            (query.queryKey.includes("user") || query.queryKey.includes("due"))
-        });
+        queryClient.invalidateQueries({ queryKey: ["flashcards"] });
       }
     },
   });
@@ -412,12 +410,7 @@ export function useDeleteFlashcard() {
       db.flashcards.deleteFlashcard(flashcardId),
     onSuccess: (response) => {
       if (response.success) {
-        // More targeted invalidation
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            query.queryKey.includes("flashcards") && 
-            (query.queryKey.includes("user") || query.queryKey.includes("due"))
-        });
+        queryClient.invalidateQueries({ queryKey: ["flashcards"] });
       }
     },
   });
@@ -434,12 +427,19 @@ export function useSubmitAnswer() {
     mutationFn: (data: CreateUserAnswerInput) => db.answers.submitAnswer(data),
     onSuccess: (response, variables) => {
       if (response.success) {
-        // More selective invalidation - only update what's actually affected
+        // Invalidate relevant queries
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.userAnswers(variables.user_id),
         });
-        // Dashboard stats will update naturally on next view
-        // Don't invalidate immediately to avoid unnecessary requests
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.dashboardStats(variables.user_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.recentActivity(variables.user_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.topicProgress(variables.user_id),
+        });
       }
     },
   });
@@ -471,10 +471,10 @@ export function useDashboardStats(userId: string) {
     queryFn: () => db.analytics.getDashboardStats(userId),
     select: (response) => response.data,
     enabled: !!userId,
-    staleTime: 3 * 60 * 1000, // 3 minutes - balance between freshness and performance
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    refetchOnWindowFocus: true, // Enable to refetch when returning to dashboard
+    refetchOnMount: true, // Always refetch when component mounts
     retry: 1, // Reduce retries for faster failure handling
     refetchInterval: false, // No automatic refetching
   });
@@ -486,10 +486,10 @@ export function useRecentActivity(userId: string, limit: number = 10) {
     queryFn: () => db.analytics.getRecentActivity(userId, limit),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 3 * 60 * 1000, // 3 minutes - balance between freshness and performance
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more frequent updates
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    refetchOnWindowFocus: true, // Enable to refetch when returning to dashboard
+    refetchOnMount: true, // Always refetch when component mounts
     retry: 1, // Reduce retries for faster failure handling
     refetchInterval: false, // No automatic refetching
   });
@@ -501,9 +501,9 @@ export function useTopicProgress(userId: string) {
     queryFn: () => db.analytics.getTopicProgress(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 10 * 60 * 1000, // 10 minutes - topic progress changes slowly
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
-    refetchOnWindowFocus: false, // Disabled to reduce unnecessary requests
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false, // Disable to reduce unnecessary requests
     refetchOnMount: false, // Only refetch when data is stale
     retry: 1, // Reduce retries for faster failure handling
     refetchInterval: false, // No automatic refetching
@@ -608,40 +608,24 @@ export function usePrefetchUserData() {
 
   return useCallback(
     (userId: string) => {
-      // Only prefetch if data is not already cached and fresh
-      const prefetchIfStale = (queryKey: readonly unknown[], queryFn: () => Promise<any>, staleTime: number) => {
-        const query = queryClient.getQueryData(queryKey);
-        const queryState = queryClient.getQueryState(queryKey);
-        
-        // Only prefetch if data doesn't exist or is stale
-        if (!query || !queryState || Date.now() - (queryState.dataUpdatedAt || 0) > staleTime) {
-          queryClient.prefetchQuery({
-            queryKey,
-            queryFn,
-            staleTime,
-          });
-        }
-      };
+      // Prefetch commonly used data
+      queryClient.prefetchQuery({
+        queryKey: QUERY_KEYS.dashboardStats(userId),
+        queryFn: () => db.analytics.getDashboardStats(userId),
+        staleTime: 2 * 60 * 1000,
+      });
 
-      // Prefetch only essential data with optimized stale times
-      prefetchIfStale(
-        QUERY_KEYS.dashboardStats(userId),
-        () => db.analytics.getDashboardStats(userId),
-        3 * 60 * 1000 // 3 minutes
-      );
+      queryClient.prefetchQuery({
+        queryKey: QUERY_KEYS.userQuizzes(userId),
+        queryFn: () => db.quizzes.getUserQuizzes(userId),
+        staleTime: 5 * 60 * 1000,
+      });
 
-      prefetchIfStale(
-        QUERY_KEYS.userQuizzes(userId),
-        () => db.quizzes.getUserQuizzes(userId),
-        5 * 60 * 1000 // 5 minutes
-      );
-
-      // Only prefetch topics if not already cached
-      prefetchIfStale(
-        QUERY_KEYS.topics,
-        () => db.topics.getAllTopics(),
-        15 * 60 * 1000 // 15 minutes
-      );
+      queryClient.prefetchQuery({
+        queryKey: QUERY_KEYS.topics,
+        queryFn: () => db.topics.getAllTopics(),
+        staleTime: 10 * 60 * 1000,
+      });
     },
     [queryClient]
   );

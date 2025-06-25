@@ -1,0 +1,71 @@
+# =============================================================================
+# ExamCraft Frontend - Development Dockerfile
+# =============================================================================
+# This Dockerfile is optimized for development with:
+# - Hot reload support
+# - Volume mounts for source code
+# - Development dependencies included
+# - Faster build times with less optimization
+# =============================================================================
+
+# Base stage for development environment
+FROM node:20.11.1-alpine AS base
+
+# Install dependencies for development
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+        libc6-compat \
+        dumb-init \
+        git \
+        openssh \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user (same as production for consistency)
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy package files first for better layer caching
+COPY package.json package-lock.json* ./
+
+# Install all dependencies (including devDependencies for development)
+RUN npm ci --frozen-lockfile && \
+    npm cache clean --force
+
+# Copy source code with proper permissions
+COPY --chown=nextjs:nodejs . .
+
+# Create necessary directories with proper permissions
+RUN mkdir -p .next && \
+    chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port for development server
+EXPOSE 3000
+
+# Set development environment variables
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHOKIDAR_USEPOLLING=true \
+    WATCHPACK_POLLING=true
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start development server with hot reload
+CMD ["npm", "run", "dev"]
+
+# =============================================================================
+# Development stage that can be targeted from docker-compose
+# =============================================================================
+FROM base AS development
+
+# All configurations are inherited from the base image
