@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -21,36 +21,46 @@ import {
   X,
 } from "lucide-react";
 
-// Animated Counter Component with performance optimization
-const AnimatedCounter = ({
-  value,
-  duration = 2000,
-}: {
-  value: number;
-  duration?: number;
-}) => {
-  const [count, setCount] = useState(0);
+// Simple Counter Component for better performance
+const StaticCounter = ({ value }: { value: number }) => {
+  return <span>{value}</span>;
+};
+
+// Animated Counter Component with smooth counting animation
+const AnimatedCounter = ({ value }: { value: number }) => {
+  const [currentValue, setCurrentValue] = useState(0);
   const shouldReduceMotion = useReducedMotion();
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (shouldReduceMotion) {
-      setCount(value);
+      setCurrentValue(value);
       return;
     }
 
-    const timer = setInterval(() => {
-      setCount((prev) => {
-        if (prev < value) {
-          return Math.min(prev + Math.ceil(value / (duration / 50)), value);
-        }
-        return prev;
-      });
-    }, 50);
+    const duration = 2000; // 2 seconds
+    const startTime = Date.now();
+    const startValue = 0;
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const currentVal = Math.round(startValue + (value - startValue) * easeOut);
+      
+      setCurrentValue(currentVal);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    const timeout = setTimeout(animate, 500); // Start after 500ms delay
+    return () => clearTimeout(timeout);
+  }, [value, shouldReduceMotion]);
 
-    return () => clearInterval(timer);
-  }, [value, duration, shouldReduceMotion]);
-
-  return <span>{count}</span>;
+  return <span>{currentValue.toLocaleString()}</span>;
 };
 
 // Floating Animation Component with reduced motion support
@@ -312,7 +322,11 @@ const MobileNavigation = () => {
                 className="w-full h-12 !border-2 !border-gray-600 !text-gray-200 !bg-gray-800 hover:!bg-gray-700 hover:!text-white hover:!border-gray-500 !transition-all !duration-300 !rounded-xl !font-medium"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link href="/auth/signin" className="flex items-center justify-center space-x-2">
+                <Link 
+                  href="/auth/signin" 
+                  prefetch={true}
+                  className="flex items-center justify-center space-x-2"
+                >
                   <Users className="w-4 h-4" />
                   <span>Sign In</span>
                 </Link>
