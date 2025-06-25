@@ -231,13 +231,13 @@ const MobileNavigation = () => {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="md:hidden p-2 text-gray-300 hover:text-white transition-colors"
+        className="md:hidden p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-300"
         aria-label="Toggle mobile menu"
       >
         {isMobileMenuOpen ? (
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         ) : (
-          <Menu className="w-6 h-6" />
+          <Menu className="w-5 h-5" />
         )}
       </button>
 
@@ -248,7 +248,7 @@ const MobileNavigation = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: shouldReduceMotion ? 0.1 : 0.3 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-black/90 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -261,38 +261,83 @@ const MobileNavigation = () => {
           duration: shouldReduceMotion ? 0.1 : 0.3,
           ease: "easeInOut"
         }}
-        className="fixed top-0 right-0 h-full w-64 bg-gray-900/95 backdrop-blur-md border-l border-gray-700 z-50 md:hidden"
+        className="fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700 shadow-2xl z-50 md:hidden"
       >
-        <div className="p-6 pt-20">
-          <nav className="space-y-6">
+        {/* Mobile Menu Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-700 bg-gray-800">
+          <div className="flex items-center space-x-2">
+            <div className="p-2 bg-gradient-to-br from-purple-500/30 to-blue-500/30 rounded-lg border border-purple-400/50">
+              <Brain className="w-5 h-5 text-purple-400" />
+            </div>
+            <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+              ExamCraft
+            </span>
+          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-all duration-200"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Mobile Menu Content */}
+        <div className="p-6 bg-gray-900 h-full">
+          <nav className="space-y-1">
+            {/* Navigation Links */}
             <Link
               href="#features"
-              className="block text-gray-300 hover:text-white transition-colors text-lg"
+              className="flex items-center px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 text-base font-medium"
               onClick={() => setIsMobileMenuOpen(false)}
             >
+              <Brain className="w-5 h-5 mr-3 text-purple-400" />
               Features
             </Link>
             <Link
               href="#testimonials"
-              className="block text-gray-300 hover:text-white transition-colors text-lg"
+              className="flex items-center px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 text-base font-medium"
               onClick={() => setIsMobileMenuOpen(false)}
             >
+              <Star className="w-5 h-5 mr-3 text-yellow-400" />
               Reviews
             </Link>
-            <div className="pt-4 space-y-3">
+            
+            {/* Divider */}
+            <div className="my-6 border-t border-gray-700"></div>
+            
+            {/* Action Buttons */}
+            <div className="space-y-3">
               <Button
                 variant="outline"
-                className="w-full !border-gray-600 !text-gray-300 !bg-transparent hover:!bg-gray-700 hover:!text-white !transition-all !duration-300"
+                className="w-full h-12 !border-2 !border-gray-600 !text-gray-200 !bg-gray-800 hover:!bg-gray-700 hover:!text-white hover:!border-gray-500 !transition-all !duration-300 !rounded-xl !font-medium"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link href="/auth/signin">Sign In</Link>
+                <Link href="/auth/signin" className="flex items-center justify-center space-x-2">
+                  <Users className="w-4 h-4" />
+                  <span>Sign In</span>
+                </Link>
               </Button>
+              
               <Button 
-                className="w-full !bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300"
+                className="w-full h-12 !bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300 !rounded-xl !font-medium !shadow-lg hover:!shadow-purple-500/25"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link href="/auth/signup">Start Free Trial</Link>
+                <Link href="/auth/signup" className="flex items-center justify-center space-x-2">
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Start Free Trial</span>
+                </Link>
               </Button>
+            </div>
+
+            {/* Additional Info */}
+            <div className="mt-8 p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-400/30 bg-gray-800">
+              <div className="flex items-center space-x-2 mb-2">
+                <Trophy className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium text-purple-300">Free Trial Available</span>
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                No credit card required • 14-day free trial • Cancel anytime
+              </p>
             </div>
           </nav>
         </div>
@@ -349,7 +394,7 @@ export default function Home() {
       <div className="relative z-10">
         {/* Navigation */}
         <motion.nav
-          className="fixed top-0 w-full z-50 bg-black/20 backdrop-blur-md border-b border-gray-800/50"
+          className="fixed top-0 w-full z-50 bg-gray-900 border-b border-gray-700 shadow-lg"
           initial={{ y: shouldReduceMotion ? 0 : -100 }}
           animate={{ y: 0 }}
           transition={{ duration: shouldReduceMotion ? 0.3 : 0.8 }}
@@ -362,35 +407,47 @@ export default function Home() {
                 transition: { duration: 0.3 }
               }}
             >
-              <Brain className="w-6 h-6 md:w-8 md:h-8 text-purple-400" />
+              <div className="p-2 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-lg border border-purple-400/30">
+                <Brain className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
+              </div>
               <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                 ExamCraft
               </span>
             </motion.div>
             
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-6">
+            <div className="hidden md:flex items-center space-x-2">
               <Link
                 href="#features"
-                className="text-gray-400 hover:text-gray-200 transition-colors duration-300"
+                className="px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-300 font-medium"
               >
                 Features
               </Link>
               <Link
                 href="#testimonials"
-                className="text-gray-400 hover:text-gray-200 transition-colors duration-300"
+                className="px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-300 font-medium"
               >
                 Reviews
               </Link>
-              <Button
-                variant="outline"
-                className="!border-gray-600 !text-gray-300 !bg-transparent hover:!bg-gray-700 hover:!text-white !transition-all !duration-300"
-              >
-                <Link href="/auth/signin">Sign In</Link>
-              </Button>
-              <Button className="!bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300">
-                <Link href="/auth/signup">Start Free Trial</Link>
-              </Button>
+              
+              {/* Desktop Action Buttons */}
+              <div className="flex items-center space-x-3 ml-4">
+                <Button
+                  variant="outline"
+                  className="!border-2 !border-gray-600 !text-gray-200 !bg-gray-800 hover:!bg-gray-700 hover:!text-white hover:!border-gray-500 !transition-all !duration-300 !rounded-lg !font-medium"
+                >
+                  <Link href="/auth/signin" className="flex items-center space-x-2">
+                    <Users className="w-4 h-4" />
+                    <span>Sign In</span>
+                  </Link>
+                </Button>
+                <Button className="!bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300 !rounded-lg !font-medium !shadow-lg hover:!shadow-purple-500/25">
+                  <Link href="/auth/signup" className="flex items-center space-x-2">
+                    <ArrowRight className="w-4 h-4" />
+                    <span>Start Free Trial</span>
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             {/* Mobile Navigation */}
