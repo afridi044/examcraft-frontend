@@ -45,7 +45,7 @@ jobs:
       
       - name: Tag and push to Docker Hub
         run: |
-          docker tag examcraft-frontend-examcraft-frontend:latest sajidnoor5051/sajid_private_repo:examcraft-v2
+          docker tag examcraft-frontend_examcraft-frontend:latest sajidnoor5051/sajid_private_repo:examcraft-v2
           docker push sajidnoor5051/sajid_private_repo:examcraft-v2
 
   deploy:
