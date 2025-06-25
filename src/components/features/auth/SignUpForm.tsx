@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
-export function SignUpForm() {
+// Memoize the form component for better performance
+export const SignUpForm = memo(function SignUpForm() {
   const router = useRouter();
   // Lazy initialize auth hook to reduce initial load time
   const { signUp, loading } = useAuth();
@@ -28,15 +29,21 @@ export function SignUpForm() {
     field_of_study: "",
   }));
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
-    setError("");
-  };
+    if (error) setError("");
+  }, [error]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword(prev => !prev);
+  }, []);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
@@ -85,7 +92,7 @@ export function SignUpForm() {
         router.push("/auth/signin");
       }, 4000);
     }
-  };
+  }, [formData, signUp, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black flex items-center justify-center p-4 relative overflow-hidden">
@@ -265,7 +272,7 @@ export function SignUpForm() {
                 <button
                   type="button"
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={togglePasswordVisibility}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -350,4 +357,4 @@ export function SignUpForm() {
       </div>
     </div>
   );
-}
+});

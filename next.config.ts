@@ -14,6 +14,36 @@ const nextConfig: NextConfig = {
   },
   // Docker optimization: Enable standalone output for minimal production builds
   output: 'standalone',
+  
+  // Performance optimizations
+  experimental: {
+    // Enable optimized package imports for better bundle size
+    optimizePackageImports: ['lucide-react', '@tanstack/react-query'],
+    // Enable aggressive tree shaking
+    turbo: {
+      resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
+    },
+  },
+  
+  // Optimize bundling and loading
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  
+  // Image optimization
+  images: {
+    // Enable modern image formats
+    formats: ['image/webp', 'image/avif'],
+    // Optimize for better performance
+    minimumCacheTTL: 86400, // 24 hours
+  },
+  
+  // Enable gzip compression
+  compress: true,
+  
+  // Optimize page loading
+  poweredByHeader: false,
 };
 
 export default nextConfig;
