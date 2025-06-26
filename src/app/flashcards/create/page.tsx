@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import {
   useCurrentUser,
@@ -42,10 +43,18 @@ interface FlashcardGenerationForm {
 export default function CreateFlashcardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading } = useAuth();
   const { data: currentUser } = useCurrentUser();
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
   const queryClient = useQueryClient();
+
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedFlashcards, setGeneratedFlashcards] = useState<{
