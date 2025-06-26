@@ -110,12 +110,12 @@ export default function QuizHistoryPage() {
   });
 
   // Simplified loading logic
-  const isAuthenticating = loading || !user;
-  const isLoadingUserData = userLoading || !currentUser;
-  const isLoadingQuizData = userId && loadingAttempts;
+  const isAuthenticating = loading && !signingOut;
+  const isLoadingUserData = userLoading && !signingOut;
+  const isLoadingQuizData = userId && loadingAttempts && !signingOut;
   
-  // Show loading screen only when necessary and not signing out
-  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
+  // Show loading screen only when necessary and aggressively prevent during sign out
+  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
 
   // For safer data access with defaults
   const safeQuizAttempts = quizAttempts || [];

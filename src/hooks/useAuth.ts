@@ -142,11 +142,12 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      // Set signing out state to prevent loading screen
+      // Immediately update all states synchronously to prevent any loading screen flash
       setSigningOut(true);
-      // Immediately set loading to false to prevent loading screen
       setLoading(false);
+      setUser(null);
       
+      // Then perform the actual sign out
       const { error } = await supabase.auth.signOut();
 
       if (error) throw error;
@@ -157,6 +158,7 @@ export function useAuth() {
         error instanceof Error ? error.message : "Sign out failed";
       setSigningOut(false);
       setLoading(false);
+      setUser(null);
       return { error: errorMessage };
     }
   };

@@ -85,12 +85,12 @@ export default function QuizReviewPage() {
   }, [authLoading, user, router]);
 
   // Simplified loading logic
-  const isAuthenticating = authLoading || !user;
-  const isLoadingUserData = userLoading || !currentUser;
-  const isLoadingReviewData = dataLoading;
+  const isAuthenticating = authLoading && !signingOut;
+  const isLoadingUserData = userLoading && !signingOut;
+  const isLoadingReviewData = dataLoading && !signingOut;
   
-  // Show loading screen only when necessary and not signing out
-  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingReviewData);
+  // Show loading screen only when necessary and aggressively prevent during sign out
+  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingReviewData);
 
   useEffect(() => {
     if (currentUser && quizId) {

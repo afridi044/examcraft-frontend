@@ -46,13 +46,13 @@ export default function DashboardPage() {
   const topicProgress = dashboardData.data?.topicProgress || [];
 
   // Simplified loading logic - only show loading when we don't have essential data
-  const isAuthenticating = loading || !user;
-  const isLoadingUserData = userLoading || !currentUser;
-  const isLoadingDashboardData = userId && dashboardData.isLoading;
+  const isAuthenticating = loading && !signingOut;
+  const isLoadingUserData = userLoading && !signingOut;
+  const isLoadingDashboardData = userId && dashboardData.isLoading && !signingOut;
   
   // Show loading screen only when authenticating or when we have a user but no data yet
-  // Don't show loading when signing out
-  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingDashboardData);
+  // Aggressively prevent loading when signing out or when user is null
+  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingDashboardData);
   
   // For safer data access with defaults
   const safeStats = stats || {

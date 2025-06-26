@@ -66,12 +66,12 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Simplified loading logic
-  const isAuthenticating = loading || !user;
-  const isLoadingUserData = userLoading || !currentUser;
-  const isLoadingStudyData = dataLoading;
+  const isAuthenticating = loading && !signingOut;
+  const isLoadingUserData = userLoading && !signingOut;
+  const isLoadingStudyData = dataLoading && !signingOut;
   
-  // Show loading screen only when necessary and not signing out
-  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingStudyData);
+  // Show loading screen only when necessary and aggressively prevent during sign out
+  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingStudyData);
 
   // Fixed stats tracking
   const [sessionStats, setSessionStats] = useState<SessionStats>({

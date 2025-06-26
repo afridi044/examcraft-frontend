@@ -56,12 +56,12 @@ export default function TakeQuizPage() {
   const { data: quiz, isLoading: quizLoading } = useQuizWithQuestions(quizId);
 
   // Simplified loading logic
-  const isAuthenticating = loading || !user;
-  const isLoadingUserData = userLoading || !currentUser;
-  const isLoadingQuizData = quizLoading;
+  const isAuthenticating = loading && !signingOut;
+  const isLoadingUserData = userLoading && !signingOut;
+  const isLoadingQuizData = quizLoading && !signingOut;
   
-  // Show loading screen only when necessary and not signing out
-  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
+  // Show loading screen only when necessary and aggressively prevent during sign out
+  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Map<string, UserAnswer>>(
