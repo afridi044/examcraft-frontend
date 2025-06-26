@@ -16,19 +16,6 @@ export async function POST(request: NextRequest) {
   try {
     const body: SubmitAnswerRequest = await request.json();
 
-    console.log("=== SUBMIT ANSWER API ===");
-    console.log("Submitting answer:", {
-      user_id: body.user_id,
-      question_id: body.question_id,
-      quiz_id: body.quiz_id,
-      is_correct: body.is_correct,
-      selected_option_id: body.selected_option_id,
-      text_answer: body.text_answer,
-    });
-    console.log("User ID type:", typeof body.user_id);
-    console.log("Question ID type:", typeof body.question_id);
-    console.log("Quiz ID type:", typeof body.quiz_id);
-
     // Validate required fields
     if (!body.user_id || !body.question_id) {
       return NextResponse.json(
@@ -54,14 +41,9 @@ export async function POST(request: NextRequest) {
     // Submit answer to database
     const response = await db.answers.submitAnswer(answerInput);
 
-    console.log("Database response:", response.success, response.error);
-
     if (!response.success) {
-      console.error("Failed to submit answer:", response.error);
       throw new Error(response.error || "Failed to submit answer");
     }
-
-    console.log("Answer submitted successfully:", response.data?.answer_id);
 
     return NextResponse.json({
       success: true,

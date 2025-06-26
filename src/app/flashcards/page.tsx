@@ -380,9 +380,6 @@ export default function FlashcardsPage() {
   // Refresh data when flashcards page loads
   useEffect(() => {
     if (currentUser?.user_id) {
-      console.log("Flashcards: Invalidating data on mount/navigation", {
-        userId: currentUser.user_id,
-      });
       invalidateUserData(currentUser.user_id);
     }
   }, [currentUser?.user_id, invalidateUserData]);

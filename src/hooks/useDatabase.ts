@@ -471,12 +471,13 @@ export function useDashboardStats(userId: string) {
     queryFn: () => db.analytics.getDashboardStats(userId),
     select: (response) => response.data,
     enabled: !!userId,
-    staleTime: 3 * 60 * 1000, // 3 minutes - balance between freshness and performance
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
-    retry: 1, // Reduce retries for faster failure handling
-    refetchInterval: false, // No automatic refetching
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes for instant loading
+    refetchOnWindowFocus: false,
+    retry: 1,
+    refetchInterval: false,
+    // Show cached data immediately while fetching fresh data
+    placeholderData: (previousData, previousQuery) => previousData,
   });
 }
 
@@ -486,12 +487,13 @@ export function useRecentActivity(userId: string, limit: number = 10) {
     queryFn: () => db.analytics.getRecentActivity(userId, limit),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 3 * 60 * 1000, // 3 minutes - balance between freshness and performance
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
-    retry: 1, // Reduce retries for faster failure handling
-    refetchInterval: false, // No automatic refetching
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes for instant loading
+    refetchOnWindowFocus: false,
+    retry: 1,
+    refetchInterval: false,
+    // Show cached data immediately while fetching fresh data
+    placeholderData: (previousData, previousQuery) => previousData,
   });
 }
 
@@ -501,12 +503,13 @@ export function useTopicProgress(userId: string) {
     queryFn: () => db.analytics.getTopicProgress(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 10 * 60 * 1000, // 10 minutes - topic progress changes slowly
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
-    refetchOnWindowFocus: false, // Disabled to reduce unnecessary requests
-    refetchOnMount: false, // Only refetch when data is stale
-    retry: 1, // Reduce retries for faster failure handling
-    refetchInterval: false, // No automatic refetching
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes for instant loading
+    refetchOnWindowFocus: false,
+    retry: 1,
+    refetchInterval: false,
+    // Show cached data immediately while fetching fresh data
+    placeholderData: (previousData, previousQuery) => previousData,
   });
 }
 
@@ -583,8 +586,26 @@ export function useUserContent(userId: string) {
 export function useInvalidateUserData() {
   const queryClient = useQueryClient();
 
+  return useCallback((userId: string) => {
+    // Only invalidate essential dashboard data, not everything
+    queryClient.invalidateQueries({
+      queryKey: QUERY_KEYS.dashboardStats(userId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: QUERY_KEYS.recentActivity(userId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: QUERY_KEYS.topicProgress(userId),
+    });
+  }, [queryClient]);
+}
+
+// More targeted invalidation for specific operations
+export function useInvalidateAllUserData() {
+  const queryClient = useQueryClient();
+
   return (userId: string) => {
-    // Invalidate all user-related queries
+    // Invalidate all user-related queries (use sparingly)
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.userQuizzes(userId) });
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.userExams(userId) });
     queryClient.invalidateQueries({
@@ -623,13 +644,26 @@ export function usePrefetchUserData() {
         }
       };
 
-      // Prefetch only essential data with optimized stale times
+      // Prefetch essential dashboard data for instant loading
       prefetchIfStale(
         QUERY_KEYS.dashboardStats(userId),
         () => db.analytics.getDashboardStats(userId),
-        3 * 60 * 1000 // 3 minutes
+        2 * 60 * 1000 // 2 minutes
       );
 
+      prefetchIfStale(
+        QUERY_KEYS.recentActivity(userId),
+        () => db.analytics.getRecentActivity(userId, 10),
+        2 * 60 * 1000 // 2 minutes
+      );
+
+      prefetchIfStale(
+        QUERY_KEYS.topicProgress(userId),
+        () => db.analytics.getTopicProgress(userId),
+        5 * 60 * 1000 // 5 minutes
+      );
+
+      // Also prefetch user quizzes for faster navigation
       prefetchIfStale(
         QUERY_KEYS.userQuizzes(userId),
         () => db.quizzes.getUserQuizzes(userId),

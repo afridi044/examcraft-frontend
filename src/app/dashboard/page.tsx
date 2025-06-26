@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -8,7 +9,6 @@ import {
   useDashboardStats,
   useRecentActivity,
   useTopicProgress,
-  useInvalidateUserData,
 } from "@/hooks/useDatabase";
 import {
   BookOpen,
@@ -22,79 +22,56 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  // const router = useRouter();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllProgress, setShowAllProgress] = useState(false);
 
-  // Get current user profile data
+  // Get current user profile data for proper database user ID
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const invalidateUserData = useInvalidateUserData();
+  
+  // Use the database user_id
+  const userId = currentUser?.user_id || "";
 
-  // Use the Supabase user ID directly for faster initial load
-  const userId = currentUser?.user_id || user?.id || "";
-
-  // Refresh data when dashboard comes into focus or mounts
-  useEffect(() => {
-    // Invalidate data immediately when dashboard mounts (navigation back)
-    if (userId) {
-      console.log("Dashboard: Invalidating data on mount/navigation", {
-        userId,
-      });
-      invalidateUserData(userId);
-    }
-  }, [userId, invalidateUserData]);
-
-  useEffect(() => {
-    const handleFocus = () => {
-      if (userId) {
-        console.log("Dashboard: Invalidating data on window focus", { userId });
-        invalidateUserData(userId);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden && userId) {
-        console.log("Dashboard: Invalidating data on visibility change", {
-          userId,
-        });
-        invalidateUserData(userId);
-      }
-    };
-
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [userId, invalidateUserData]);
-
-  // PARALLEL DATA FETCHING - All hooks run simultaneously for faster loading
+  // Fetch dashboard data - only when we have a userId
   const { data: stats, isLoading: statsLoading } = useDashboardStats(userId);
-  const { data: recentActivity } = useRecentActivity(userId);
-  const { data: topicProgress } = useTopicProgress(userId);
+  const { data: recentActivity, isLoading: activityLoading } = useRecentActivity(userId);
+  const { data: topicProgress, isLoading: progressLoading } = useTopicProgress(userId);
 
-  // Log when dashboard data is refreshed
-  useEffect(() => {
-    if (stats && recentActivity && topicProgress) {
-      console.log("Dashboard: Data refreshed", {
-        totalQuizzes: stats.totalQuizzes,
-        recentActivityCount: recentActivity.length,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }, [stats, recentActivity, topicProgress]);
+  // Consolidated loading logic - show main loading until we have essential data
+  const isMainLoading = loading || !user || userLoading || !currentUser;
+  const isDataLoading = statsLoading || activityLoading || progressLoading;
+  
+  // Show full loading screen for both auth and initial data load
+  const showFullLoadingScreen = isMainLoading || (userId && isDataLoading);
+  
+  // For safer data access with defaults
+  const safeStats = stats || {
+    totalQuizzes: 0,
+    totalExams: 0,
+    totalFlashcards: 0,
+    averageScore: 0,
+    studyStreak: 0,
+    questionsAnswered: 0
+  };
+  const safeRecentActivity = recentActivity || [];
+  const safeTopicProgress = topicProgress || [];
 
-  // Individual loading states for progressive loading
-  const isStatsLoading = userLoading || statsLoading;
+  const StatValue = ({ value, suffix = "" }: { 
+    value: number; 
+    suffix?: string; 
+  }) => {
+    return (
+      <p className="text-2xl font-bold text-white">
+        {value.toLocaleString()}{suffix}
+      </p>
+    );
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -117,8 +94,8 @@ export default function DashboardPage() {
     }
   };
 
-  // OPTIMIZED: Show auth loading only, render dashboard with skeleton for data loading
-  if (loading || !user) {
+  // Single loading screen for all loading states
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -130,10 +107,10 @@ export default function DashboardPage() {
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-2xl blur-xl"></div>
             </div>
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
-              Loading...
+              Loading Dashboard...
             </h2>
             <p className="text-gray-400">
-              Preparing your learning experience...
+              Preparing your learning experience
             </p>
           </div>
         </div>
@@ -143,11 +120,13 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-20 mt-20">
-        {/* Premium Dark Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+      <div className="space-y-8 mt-8 p-10">
+
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {/* Total Quizzes Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10">
             <Link
               href="/dashboard/quiz-history"
               className="absolute inset-0 rounded-xl"
@@ -162,13 +141,9 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Quizzes
                   </p>
-                  {isStatsLoading ? (
-                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
-                  ) : (
-                    <p className="text-2xl font-bold text-white">
-                      {stats?.totalQuizzes || 0}
-                    </p>
-                  )}
+                  <StatValue 
+                    value={safeStats.totalQuizzes}
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -179,7 +154,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Total Exams Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-green-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-green-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-10 w-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-500/20">
@@ -189,13 +164,9 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Exams
                   </p>
-                  {isStatsLoading ? (
-                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
-                  ) : (
-                    <p className="text-2xl font-bold text-white">
-                      {stats?.totalExams || 0}
-                    </p>
-                  )}
+                  <StatValue 
+                    value={safeStats.totalExams}
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -206,7 +177,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Flashcards Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50  hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-purple-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/10">
             <Link
               href="/flashcards"
               className="absolute inset-0 rounded-xl"
@@ -221,13 +192,9 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Flashcards
                   </p>
-                  {isStatsLoading ? (
-                    <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse"></div>
-                  ) : (
-                    <p className="text-2xl font-bold text-white">
-                      {stats?.totalFlashcards || 0}
-                    </p>
-                  )}
+                  <StatValue 
+                    value={safeStats.totalFlashcards}
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -238,7 +205,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Overall Score Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-amber-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-10 w-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
@@ -248,9 +215,10 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Overall Score
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.averageScore || 0}%
-                  </p>
+                  <StatValue 
+                    value={safeStats.averageScore}
+                    suffix="%"
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -261,7 +229,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Study Streak Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-orange-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-orange-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-10 w-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
@@ -271,9 +239,10 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Study Streak
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.studyStreak || 0} days
-                  </p>
+                  <StatValue 
+                    value={safeStats.studyStreak}
+                    suffix=" days"
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -286,7 +255,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Questions Answered Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50 hover:shadow-lg hover:shadow-indigo-500/20 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-indigo-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-10 w-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -296,9 +265,9 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Questions Answered
                   </p>
-                  <p className="text-2xl font-bold text-white">
-                    {stats?.questionsAnswered || 0}
-                  </p>
+                  <StatValue 
+                    value={safeStats.questionsAnswered}
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -309,7 +278,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Premium Dark Recent Activity */}
+        {/* Recent Activity */}
         <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-lg shadow-black/10 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between">
@@ -321,7 +290,7 @@ export default function DashboardPage() {
                   Recent Activity
                 </h2>
               </div>
-              {recentActivity && recentActivity.length > 3 && (
+              {safeRecentActivity.length > 3 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -345,12 +314,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="p-4">
-            {recentActivity && recentActivity.length > 0 ? (
+            {safeRecentActivity.length > 0 ? (
               <div className="space-y-2">
                 {(showAllActivity
-                  ? recentActivity
-                  : recentActivity.slice(0, 3)
-                ).map((activity) => (
+                  ? safeRecentActivity
+                  : safeRecentActivity.slice(0, 3)
+                ).map((activity: any) => (
                   <div
                     key={activity.id}
                     className="group flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
@@ -398,7 +367,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Premium Dark Topic Progress */}
+        {/* Topic Progress */}
         <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-lg shadow-black/10 overflow-hidden">
           <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between">
@@ -408,7 +377,7 @@ export default function DashboardPage() {
                 </div>
                 <h2 className="text-lg font-bold text-white">Topic Progress</h2>
               </div>
-              {topicProgress && topicProgress.length > 3 && (
+              {safeTopicProgress.length > 3 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -432,11 +401,11 @@ export default function DashboardPage() {
           </div>
 
           <div className="p-4">
-            {topicProgress && topicProgress.length > 0 ? (
+            {safeTopicProgress.length > 0 ? (
               <div className="space-y-2">
                 {(showAllProgress
-                  ? topicProgress
-                  : topicProgress.slice(0, 3)
+                  ? safeTopicProgress
+                  : safeTopicProgress.slice(0, 3)
                 ).map((topic) => (
                   <div
                     key={topic.topic_id}

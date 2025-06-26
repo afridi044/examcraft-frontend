@@ -55,13 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: UpdateProgressRequest = await request.json();
 
-    console.log("Update progress API called with:", body);
-
     if (!body.flashcard_id || !body.performance) {
-      console.log("Missing required fields:", {
-        flashcard_id: body.flashcard_id,
-        performance: body.performance,
-      });
       return NextResponse.json(
         { error: "Flashcard ID and performance are required" },
         { status: 400 }
@@ -69,7 +63,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!["know", "dont_know"].includes(body.performance)) {
-      console.log("Invalid performance value:", body.performance);
       return NextResponse.json(
         { error: "Invalid performance value. Must be 'know' or 'dont_know'" },
         { status: 400 }
@@ -77,15 +70,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current flashcard data
-    console.log("Getting flashcard by ID:", body.flashcard_id);
     const flashcardResult = await db.flashcards.getFlashcardById(
       body.flashcard_id
     );
 
-    console.log("Flashcard result:", flashcardResult);
-
     if (!flashcardResult.success || !flashcardResult.data) {
-      console.log("Flashcard not found or error:", flashcardResult);
       return NextResponse.json(
         { error: "Flashcard not found" },
         { status: 404 }
@@ -93,7 +82,6 @@ export async function POST(request: NextRequest) {
     }
 
     const flashcard = flashcardResult.data;
-    console.log("Current flashcard data:", flashcard);
 
     // Calculate new mastery status using Magoosh-style algorithm
     const newValues = calculateMasteryStatus(
@@ -102,25 +90,18 @@ export async function POST(request: NextRequest) {
       flashcard.consecutive_correct
     );
 
-    console.log("Calculated new mastery values:", newValues);
-
     // Update flashcard in database
     const updateData = {
       mastery_status: newValues.mastery_status,
       consecutive_correct: newValues.consecutive_correct,
     };
 
-    console.log("Updating flashcard with data:", updateData);
-
     const updateResult = await db.flashcards.updateFlashcard(
       body.flashcard_id,
       updateData
     );
 
-    console.log("Update result:", updateResult);
-
     if (!updateResult.success) {
-      console.log("Update failed:", updateResult);
       return NextResponse.json(
         { error: "Failed to update flashcard" },
         { status: 500 }

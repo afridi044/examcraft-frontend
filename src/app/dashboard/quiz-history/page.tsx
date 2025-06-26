@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import {
   CircleDot,
   AlertCircle,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
   useDeleteQuiz,
   useInvalidateUserData,
 } from "@/hooks/useDatabase";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "react-hot-toast";
 
 interface QuizAttempt {
@@ -53,9 +55,12 @@ interface QuizAttempt {
 }
 
 export default function QuizHistoryPage() {
-  const { data: currentUser } = useCurrentUser();
+  const { user, loading } = useAuth();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
+  
+  // UI state
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "score" | "title">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -65,27 +70,21 @@ export default function QuizHistoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
 
-  // Refresh data when quiz history page loads
-  useEffect(() => {
-    if (currentUser?.user_id) {
-      console.log("Quiz History: Invalidating data on mount/navigation", {
-        userId: currentUser.user_id,
-      });
-      invalidateUserData(currentUser.user_id);
-    }
-  }, [currentUser?.user_id, invalidateUserData]);
+  // Use the database user_id
+  const userId = currentUser?.user_id || "";
 
-  // OPTIMIZED: Fetch user's quiz attempts with cleaner error handling
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+
+  // OPTIMIZED: More conservative data fetching - only when we have a userId
   const { data: quizAttempts, isLoading: loadingAttempts } = useQuery({
-    queryKey: ["quiz-attempts", currentUser?.user_id],
+    queryKey: ["quiz-attempts", userId],
     queryFn: async () => {
-      if (!currentUser?.user_id) {
+      if (!userId) {
         return [];
       }
 
-      const response = await fetch(
-        `/api/quiz/user-attempts/${currentUser.user_id}`
-      );
+      const response = await fetch(`/api/quiz/user-attempts/${userId}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch quiz attempts");
@@ -93,26 +92,32 @@ export default function QuizHistoryPage() {
 
       return response.json();
     },
-    enabled: !!currentUser?.user_id,
-    staleTime: 3 * 60 * 1000, // 3 minutes - reasonable for quiz history
+    enabled: !!userId, // Only fetch when we have a userId
+    staleTime: 5 * 60 * 1000, // 5 minutes - more reasonable for quiz history
     refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    refetchOnMount: "always", // Only refetch when explicitly needed
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 
-  // OPTIMIZED: Memoized statistics and filtering calculations
+  // Consolidated loading logic - show main loading until we have essential data
+  const isMainLoading = loading || !user || userLoading || !currentUser;
+  const isDataLoading = userId && loadingAttempts;
+  
+  // Show full loading screen for both auth and initial data load
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  // For safer data access with defaults
+  const safeQuizAttempts = quizAttempts || [];
+
+  // OPTIMIZED: Simplified statistics and filtering with early returns
   const { stats, filteredAttempts } = useMemo(() => {
-    if (!quizAttempts) {
+    if (!safeQuizAttempts?.length) {
       return {
         stats: {
           totalQuizzes: 0,
           completedQuizzes: 0,
           incompleteQuizzes: 0,
-          totalScore: 0,
-          totalScoreIncludingIncomplete: 0,
-          totalTime: 0,
           passedQuizzes: 0,
-          totalQuestions: 0,
-          correctAnswers: 0,
           averageScore: 0,
           averageTime: 0,
           passRate: 0,
@@ -121,108 +126,67 @@ export default function QuizHistoryPage() {
       };
     }
 
-    // Calculate statistics in a single pass
-    const stats = quizAttempts.reduce(
-      (
-        acc: {
-          totalQuizzes: number;
-          completedQuizzes: number;
-          incompleteQuizzes: number;
-          totalScore: number;
-          totalScoreIncludingIncomplete: number;
-          totalTime: number;
-          passedQuizzes: number;
-          totalQuestions: number;
-          correctAnswers: number;
-          averageScore: number;
-          averageTime: number;
-          passRate: number;
-        },
-        attempt: QuizAttempt
-      ) => {
-        acc.totalQuizzes++;
+    // Calculate statistics in a single pass with simpler logic
+    let totalQuizzes = 0;
+    let completedQuizzes = 0;
+    let incompleteQuizzes = 0;
+    let totalScore = 0;
+    let totalTime = 0;
+    let passedQuizzes = 0;
 
-        if (attempt.status === "completed") {
-          acc.completedQuizzes++;
-          acc.totalScore += attempt.score_percentage;
-          acc.totalScoreIncludingIncomplete += attempt.score_percentage;
-          acc.totalTime += attempt.time_spent_minutes;
-          if (attempt.score_percentage >= 70) acc.passedQuizzes++;
-          acc.totalQuestions += attempt.total_questions;
-          acc.correctAnswers += attempt.correct_answers;
-        }
-
-        if (attempt.status === "incomplete") {
-          acc.incompleteQuizzes++;
-          acc.totalScoreIncludingIncomplete += attempt.score_percentage;
-          acc.totalQuestions += attempt.total_questions;
-          acc.correctAnswers += attempt.correct_answers;
-        }
-
-        return acc;
-      },
-      {
-        totalQuizzes: 0,
-        completedQuizzes: 0,
-        incompleteQuizzes: 0,
-        totalScore: 0,
-        totalScoreIncludingIncomplete: 0,
-        totalTime: 0,
-        passedQuizzes: 0,
-        totalQuestions: 0,
-        correctAnswers: 0,
-        averageScore: 0,
-        averageTime: 0,
-        passRate: 0,
+    for (const attempt of safeQuizAttempts) {
+      totalQuizzes++;
+      
+      if (attempt.status === "completed") {
+        completedQuizzes++;
+        totalScore += attempt.score_percentage;
+        totalTime += attempt.time_spent_minutes;
+        if (attempt.score_percentage >= 70) passedQuizzes++;
+      } else if (attempt.status === "incomplete") {
+        incompleteQuizzes++;
+        totalScore += attempt.score_percentage;
       }
-    );
+    }
 
-    // Calculate derived statistics
-    stats.averageScore =
-      stats.completedQuizzes + stats.incompleteQuizzes > 0
-        ? stats.totalScoreIncludingIncomplete /
-          (stats.completedQuizzes + stats.incompleteQuizzes)
-        : 0;
+    const stats = {
+      totalQuizzes,
+      completedQuizzes,
+      incompleteQuizzes,
+      passedQuizzes, // Keep this for display
+      averageScore: (completedQuizzes + incompleteQuizzes) > 0 
+        ? totalScore / (completedQuizzes + incompleteQuizzes) 
+        : 0,
+      averageTime: completedQuizzes > 0 ? totalTime / completedQuizzes : 0,
+      passRate: completedQuizzes > 0 ? (passedQuizzes / completedQuizzes) * 100 : 0,
+    };
 
-    stats.averageTime =
-      stats.completedQuizzes > 0 ? stats.totalTime / stats.completedQuizzes : 0;
-
-    stats.passRate =
-      stats.completedQuizzes > 0
-        ? (stats.passedQuizzes / stats.completedQuizzes) * 100
-        : 0;
-
-    // Filter and sort in a single operation
+    // Simplified filtering and sorting
     const searchLower = searchTerm.toLowerCase();
-    const filteredAttempts = quizAttempts
+    const filteredAttempts = safeQuizAttempts
       .filter((attempt: QuizAttempt) => {
-        const matchesSearch =
+        // Search filter
+        if (searchTerm && !(
           attempt.title.toLowerCase().includes(searchLower) ||
-          attempt.topic_name?.toLowerCase().includes(searchLower);
+          attempt.topic_name?.toLowerCase().includes(searchLower)
+        )) {
+          return false;
+        }
 
-        const matchesFilter =
-          filterBy === "all" ||
-          (filterBy === "completed" && attempt.status === "completed") ||
-          (filterBy === "incomplete" && attempt.status === "incomplete") ||
-          (filterBy === "not_attempted" &&
-            attempt.status === "not_attempted") ||
-          (filterBy === "passed" &&
-            attempt.status === "completed" &&
-            attempt.score_percentage >= 70) ||
-          (filterBy === "failed" &&
-            attempt.status === "completed" &&
-            attempt.score_percentage < 70);
-
-        return matchesSearch && matchesFilter;
+        // Status filter
+        if (filterBy === "all") return true;
+        if (filterBy === attempt.status) return true;
+        if (filterBy === "passed" && attempt.status === "completed" && attempt.score_percentage >= 70) return true;
+        if (filterBy === "failed" && attempt.status === "completed" && attempt.score_percentage < 70) return true;
+        
+        return false;
       })
       .sort((a: QuizAttempt, b: QuizAttempt) => {
         let comparison = 0;
 
         switch (sortBy) {
           case "date":
-            const dateA = new Date(a.completed_at || a.created_at).getTime();
-            const dateB = new Date(b.completed_at || b.created_at).getTime();
-            comparison = dateA - dateB;
+            comparison = new Date(a.completed_at || a.created_at).getTime() - 
+                        new Date(b.completed_at || b.created_at).getTime();
             break;
           case "score":
             comparison = a.score_percentage - b.score_percentage;
@@ -236,70 +200,82 @@ export default function QuizHistoryPage() {
       });
 
     return { stats, filteredAttempts };
-  }, [quizAttempts, searchTerm, filterBy, sortBy, sortOrder]);
+  }, [safeQuizAttempts, searchTerm, filterBy, sortBy, sortOrder]);
 
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "Not completed";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // OPTIMIZED: Combined color utility functions with memoization
+  const getScoreColors = useMemo(() => {
+    return (score: number) => {
+      if (score >= 90) return {
+        text: "text-emerald-400",
+        badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+      };
+      if (score >= 80) return {
+        text: "text-green-400", 
+        badge: "bg-green-500/20 text-green-400 border-green-500/30"
+      };
+      if (score >= 70) return {
+        text: "text-yellow-400",
+        badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+      };
+      if (score >= 60) return {
+        text: "text-orange-400",
+        badge: "bg-orange-500/20 text-orange-400 border-orange-500/30"
+      };
+      return {
+        text: "text-red-400",
+        badge: "bg-red-500/20 text-red-400 border-red-500/30"
+      };
+    };
+  }, []);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-emerald-400";
-    if (score >= 80) return "text-green-400";
-    if (score >= 70) return "text-yellow-400";
-    if (score >= 60) return "text-orange-400";
-    return "text-red-400";
-  };
+  const formatDate = useMemo(() => {
+    return (dateString: string | null | undefined) => {
+      if (!dateString) return "Not completed";
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+  }, []);
 
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 90)
-      return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-    if (score >= 80)
-      return "bg-green-500/20 text-green-400 border-green-500/30";
-    if (score >= 70)
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-    if (score >= 60)
-      return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-    return "bg-red-500/20 text-red-400 border-red-500/30";
-  };
+  const getStatusBadge = useMemo(() => {
+    return (status: string) => {
+      switch (status) {
+        case "completed":
+          return "bg-green-500/20 text-green-400 border-green-500/30";
+        case "incomplete":
+          return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+        case "not_attempted":
+          return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+        case "empty":
+          return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+        default:
+          return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+      }
+    };
+  }, []);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-500/20 text-green-400 border-green-500/30";
-      case "incomplete":
-        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-      case "not_attempted":
-        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-      case "empty":
-        return "bg-gray-500/20 text-gray-400 border-gray-500/30";
-      default:
-        return "bg-gray-500/20 text-gray-400 border-gray-500/30";
-    }
-  };
+  const getStatusIcon = useMemo(() => {
+    return (status: string) => {
+      switch (status) {
+        case "completed":
+          return <CheckCircle className="h-4 w-4 text-green-400" />;
+        case "incomplete":
+          return <Pause className="h-4 w-4 text-yellow-400" />;
+        case "not_attempted":
+          return <CircleDot className="h-4 w-4 text-blue-400" />;
+        case "empty":
+          return <AlertCircle className="h-4 w-4 text-gray-400" />;
+        default:
+          return <CircleDot className="h-4 w-4 text-gray-400" />;
+      }
+    };
+  }, []);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="h-4 w-4 text-green-400" />;
-      case "incomplete":
-        return <Pause className="h-4 w-4 text-yellow-400" />;
-      case "not_attempted":
-        return <CircleDot className="h-4 w-4 text-blue-400" />;
-      case "empty":
-        return <AlertCircle className="h-4 w-4 text-gray-400" />;
-      default:
-        return <CircleDot className="h-4 w-4 text-gray-400" />;
-    }
-  };
-
-  const handleDeleteQuiz = async (quizId: string, title: string) => {
+  const handleDeleteQuiz = useCallback(async (quizId: string, title: string) => {
     if (
       !window.confirm(
         `Are you sure you want to delete "${title}"? This action cannot be undone.`
@@ -314,8 +290,8 @@ export default function QuizHistoryPage() {
       if (result.success) {
         toast.success("Quiz deleted successfully!");
         // Invalidate all user data to refresh the dashboard
-        if (currentUser?.user_id) {
-          invalidateUserData(currentUser.user_id);
+        if (userId) {
+          invalidateUserData(userId);
         }
       } else {
         toast.error("Failed to delete quiz");
@@ -326,9 +302,9 @@ export default function QuizHistoryPage() {
     } finally {
       setDeletingQuizId(null);
     }
-  };
+  }, [deleteQuizMutation, userId, invalidateUserData]);
 
-  const getActionButton = (attempt: QuizAttempt) => {
+  const getActionButton = useCallback((attempt: QuizAttempt) => {
     const isDeleting = deletingQuizId === attempt.quiz_id;
 
     switch (attempt.status) {
@@ -450,21 +426,26 @@ export default function QuizHistoryPage() {
       default:
         return null;
     }
-  };
+  }, [deletingQuizId, handleDeleteQuiz]);
 
-  if (loadingAttempts) {
+  // Single loading screen for all loading states - matching dashboard pattern
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
             <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-full blur-xl"></div>
+              <div className="h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-2xl blur-xl"></div>
             </div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              Loading Quiz History
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz History...
             </h2>
-            <p className="text-gray-400">Fetching your quiz attempts...</p>
+            <p className="text-gray-400">
+              Preparing your quiz performance data
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -529,7 +510,7 @@ export default function QuizHistoryPage() {
                   Average Score
                 </p>
                 <p
-                  className={`text-2xl font-bold ${getScoreColor(stats.averageScore)}`}
+                  className={`text-2xl font-bold ${getScoreColors(stats.averageScore).text}`}
                 >
                   {stats.completedQuizzes + stats.incompleteQuizzes > 0
                     ? stats.averageScore.toFixed(1)
@@ -550,7 +531,7 @@ export default function QuizHistoryPage() {
                   Pass Rate
                 </p>
                 <p
-                  className={`text-2xl font-bold ${getScoreColor(stats.passRate)}`}
+                  className={`text-2xl font-bold ${getScoreColors(stats.passRate).text}`}
                 >
                   {stats.completedQuizzes > 0
                     ? stats.passRate.toFixed(1)
@@ -734,12 +715,9 @@ export default function QuizHistoryPage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {filteredAttempts?.map((attempt: QuizAttempt, index: number) => (
-                <motion.div
+              {filteredAttempts?.map((attempt: QuizAttempt) => (
+                <div
                   key={`${attempt.quiz_id}-${attempt.completed_at}`}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
                 >
                   <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
                     <div className="flex items-center justify-between">
@@ -762,7 +740,7 @@ export default function QuizHistoryPage() {
                           {/* Score Badge (only for completed quizzes) */}
                           {attempt.status === "completed" && (
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium border ${getScoreBadgeColor(attempt.score_percentage)}`}
+                              className={`px-3 py-1 rounded-full text-xs font-medium border ${getScoreColors(attempt.score_percentage).badge}`}
                             >
                               {attempt.score_percentage >= 70 ? (
                                 <CheckCircle className="h-3 w-3 inline mr-1" />
@@ -818,7 +796,7 @@ export default function QuizHistoryPage() {
                         {attempt.status === "completed" ? (
                           <>
                             <div
-                              className={`text-3xl font-bold ${getScoreColor(attempt.score_percentage)}`}
+                              className={`text-3xl font-bold ${getScoreColors(attempt.score_percentage).text}`}
                             >
                               {attempt.score_percentage.toFixed(0)}%
                             </div>
@@ -847,7 +825,7 @@ export default function QuizHistoryPage() {
                       </div>
                     </div>
                   </Card>
-                </motion.div>
+                </div>
               ))}
             </div>
           )}
