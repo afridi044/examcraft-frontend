@@ -8,8 +8,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    // Disable verbose auth logging in all environments
-    debug: false,
+    // More aggressive token refresh to prevent stale tokens
+    debug: process.env.NODE_ENV === 'development',
   },
   // Reduce overall client logging
   global: {
