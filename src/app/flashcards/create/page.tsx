@@ -39,7 +39,7 @@ interface FlashcardGenerationForm {
 export default function CreateFlashcardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
@@ -177,8 +177,8 @@ export default function CreateFlashcardPage() {
   const isAuthenticating = loading || !user;
   const isLoadingUserData = userLoading || !currentUser;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData);
   
   if (showLoadingScreen) {
     return (

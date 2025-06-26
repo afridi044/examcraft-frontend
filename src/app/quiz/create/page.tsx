@@ -40,7 +40,7 @@ interface QuizGenerationForm {
 
 export default function CreateQuizPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   // Load topics in background - not blocking the UI
   const { data: topics } = useTopics();
@@ -99,8 +99,8 @@ export default function CreateQuizPage() {
   const isAuthenticating = loading || !user;
   const isLoadingUserData = userLoading || !currentUser;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData);
   
   if (showLoadingScreen) {
     return (

@@ -42,7 +42,7 @@ export default function TakeQuizPage() {
   const router = useRouter();
   const params = useParams();
   const quizId = params.quizId as string;
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   // Redirect to landing page if not authenticated and not loading
@@ -60,8 +60,8 @@ export default function TakeQuizPage() {
   const isLoadingUserData = userLoading || !currentUser;
   const isLoadingQuizData = quizLoading;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingQuizData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Map<string, UserAnswer>>(

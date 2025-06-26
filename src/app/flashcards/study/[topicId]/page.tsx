@@ -46,7 +46,7 @@ interface SessionStats {
 
 export default function StudySessionPage({ params }: StudySessionPageProps) {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   // Redirect to landing page if user is signed out
@@ -70,8 +70,8 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const isLoadingUserData = userLoading || !currentUser;
   const isLoadingStudyData = dataLoading;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingStudyData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingStudyData);
 
   // Fixed stats tracking
   const [sessionStats, setSessionStats] = useState<SessionStats>({

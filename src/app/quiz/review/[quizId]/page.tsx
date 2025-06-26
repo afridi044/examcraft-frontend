@@ -66,7 +66,7 @@ interface ReviewData {
 export default function QuizReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
@@ -89,8 +89,8 @@ export default function QuizReviewPage() {
   const isLoadingUserData = userLoading || !currentUser;
   const isLoadingReviewData = dataLoading;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingReviewData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingReviewData);
 
   useEffect(() => {
     if (currentUser && quizId) {

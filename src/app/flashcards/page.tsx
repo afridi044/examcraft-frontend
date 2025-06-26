@@ -360,7 +360,7 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
 };
 
 export default function FlashcardsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   // Get current user profile data to access database user_id
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const invalidateUserData = useInvalidateUserData();
@@ -549,8 +549,8 @@ export default function FlashcardsPage() {
   const isLoadingUserData = userLoading || !currentUser;
   const isLoadingFlashcardsData = isLoadingFlashcards;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingFlashcardsData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingFlashcardsData);
 
   if (showLoadingScreen) {
     return (

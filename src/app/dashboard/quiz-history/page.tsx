@@ -56,7 +56,7 @@ interface QuizAttempt {
 }
 
 export default function QuizHistoryPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
@@ -114,8 +114,8 @@ export default function QuizHistoryPage() {
   const isLoadingUserData = userLoading || !currentUser;
   const isLoadingQuizData = userId && loadingAttempts;
   
-  // Show loading screen only when necessary
-  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingQuizData;
+  // Show loading screen only when necessary and not signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
 
   // For safer data access with defaults
   const safeQuizAttempts = quizAttempts || [];
