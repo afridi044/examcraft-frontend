@@ -25,7 +25,7 @@ import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, signingOut } = useAuth();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -50,7 +50,8 @@ export default function DashboardPage() {
   const isDataLoading = dashboardData.isLoading;
   
   // Show full loading screen for both auth and initial data load
-  const showFullLoadingScreen = isMainLoading || (userId && isDataLoading);
+  // But not when signing out
+  const showFullLoadingScreen = !signingOut && user && (isMainLoading || (userId && isDataLoading));
   
   // For safer data access with defaults
   const safeStats = stats || {

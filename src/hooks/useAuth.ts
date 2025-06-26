@@ -8,6 +8,7 @@ export function useAuth() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +77,7 @@ export function useAuth() {
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
+          setSigningOut(false);
           return;
         }
 
@@ -140,7 +142,8 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      setLoading(true);
+      // Set signing out state to prevent loading screen
+      setSigningOut(true);
       const { error } = await supabase.auth.signOut();
 
       if (error) throw error;
@@ -149,9 +152,8 @@ export function useAuth() {
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Sign out failed";
+      setSigningOut(false);
       return { error: errorMessage };
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -186,6 +188,7 @@ export function useAuth() {
   return {
     user,
     loading,
+    signingOut,
     signUp,
     signIn,
     signOut,

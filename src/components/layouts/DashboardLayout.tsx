@@ -47,8 +47,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, []);
 
   const handleSignOut = async () => {
-    await signOut();
+    // Immediately redirect to prevent showing loading screen
     router.push("/");
+    // Then sign out in the background
+    await signOut();
   };
 
   const navigationItems = [
