@@ -344,10 +344,11 @@ export function useUserFlashcards(userId: string) {
     queryFn: () => db.flashcards.getUserFlashcards(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - reasonable for user content
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: false, // Only refetch when data is stale
+    staleTime: 1 * 60 * 1000, // 1 minute - more responsive for flashcard progress updates
+    refetchOnWindowFocus: true, // Re-enable to catch updates when returning from study sessions
+    refetchOnMount: true, // Re-enable to ensure fresh data when component mounts
     placeholderData: undefined, // Don't use placeholder data to maintain proper loading state
+    gcTime: 5 * 60 * 1000, // 5 minutes cache time
   });
 }
 
@@ -357,8 +358,10 @@ export function useFlashcardsDue(userId: string) {
     queryFn: () => db.flashcards.getFlashcardsDueForReview(userId),
     select: (response) => response.data || [],
     enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes - more frequent for due items
+    staleTime: 30 * 1000, // 30 seconds - very responsive for due items
+    refetchOnWindowFocus: true, // Re-enable to catch updates
     refetchInterval: false, // Disabled automatic refetching for better performance
+    gcTime: 2 * 60 * 1000, // 2 minutes cache time
   });
 }
 
@@ -370,11 +373,17 @@ export function useCreateFlashcard() {
       db.flashcards.createFlashcard(data),
     onSuccess: (response, variables) => {
       if (response.success) {
+        // Immediate invalidation for real-time updates
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.userFlashcards(variables.user_id),
         });
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.flashcardsDue(variables.user_id),
+        });
+        
+        // Also invalidate dashboard data for updated stats
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.dashboardStats(variables.user_id),
         });
       }
     },
@@ -392,9 +401,9 @@ export function useUpdateFlashcard() {
       flashcardId: string;
       data: UpdateFlashcardInput;
     }) => db.flashcards.updateFlashcard(flashcardId, data),
-    onSuccess: (response, { flashcardId }) => {
+    onSuccess: (response, { flashcardId, data }) => {
       if (response.success) {
-        // More targeted invalidation
+        // Invalidate all flashcard-related queries for immediate updates
         queryClient.invalidateQueries({ 
           predicate: (query) => 
             query.queryKey.includes("flashcards") && 
@@ -413,11 +422,18 @@ export function useDeleteFlashcard() {
       db.flashcards.deleteFlashcard(flashcardId),
     onSuccess: (response) => {
       if (response.success) {
-        // More targeted invalidation
+        // Immediately invalidate all flashcard-related queries for real-time updates
         queryClient.invalidateQueries({ 
           predicate: (query) => 
             query.queryKey.includes("flashcards") && 
             (query.queryKey.includes("user") || query.queryKey.includes("due"))
+        });
+        
+        // Also invalidate dashboard stats as flashcard count changed
+        queryClient.invalidateQueries({ 
+          predicate: (query) => 
+            query.queryKey.includes("dashboard") || 
+            query.queryKey.includes("analytics")
         });
       }
     },
@@ -471,10 +487,11 @@ export function useOptimizedDashboard(userId: string) {
   return useQuery({
     queryKey: [...QUERY_KEYS.dashboardStats(userId), 'batch'],
     queryFn: () => optimizedAnalyticsService.getAllDashboardData(userId),
-    enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
-    refetchOnWindowFocus: false,
+    enabled: !!userId, // Only fetch when we have a userId
+    staleTime: 2 * 60 * 1000, // 2 minutes - more reasonable for dashboard data
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
+    refetchOnWindowFocus: false, // Disabled for better performance
+    refetchOnMount: false, // Only refetch when data is stale
     retry: 1,
     refetchInterval: false,
     // Show cached data immediately while fetching fresh data
@@ -543,8 +560,8 @@ export function useTopicProgress(userId: string) {
 // Compound Hooks (Multiple Operations)
 // =============================================
 
-export function useDashboardData(userId: string, useOptimized: boolean = true) {
-  // OPTIMIZED VERSION: Single batched call (now default)
+export function useDashboardData(userId: string, useOptimized: boolean = false) {
+  // OPTIMIZED VERSION: Single batched call
   const optimizedResult = useOptimizedDashboard(userId);
   
   // LEGACY VERSION: Individual hooks (for backward compatibility)
@@ -654,6 +671,13 @@ export function useInvalidateUserData() {
     queryClient.invalidateQueries({
       queryKey: QUERY_KEYS.topicProgress(userId),
     });
+    // FIXED: Also invalidate flashcard data for real-time updates
+    queryClient.invalidateQueries({
+      queryKey: QUERY_KEYS.userFlashcards(userId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: QUERY_KEYS.flashcardsDue(userId),
+    });
   }, [queryClient]);
 }
 
@@ -685,7 +709,7 @@ export function usePrefetchUserData() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    (userId: string, useOptimized: boolean = true) => {
+    (userId: string, useOptimized: boolean = false) => {
       // Only prefetch if data is not already cached and fresh
       const prefetchIfStale = (queryKey: readonly unknown[], queryFn: () => Promise<any>, staleTime: number) => {
         const query = queryClient.getQueryData(queryKey);

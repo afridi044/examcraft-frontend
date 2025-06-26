@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
@@ -36,10 +36,10 @@ interface FlashcardGenerationForm {
   additional_instructions: string;
 }
 
-function CreateFlashcardPageContent() {
+export default function CreateFlashcardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
@@ -173,14 +173,16 @@ function CreateFlashcardPageContent() {
     }
   }, [preselectedTopicId, topics]);
 
-  // Simplified loading logic
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
   
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData);
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading;
   
-  if (showLoadingScreen) {
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -595,35 +597,5 @@ function CreateFlashcardPageContent() {
         </div>
       </div>
     </DashboardLayout>
-  );
-}
-
-// Loading component for Suspense fallback
-function CreateFlashcardLoading() {
-  return (
-    <DashboardLayout>
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
-        <div className="text-center max-w-md mx-auto">
-          <div className="h-16 w-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <BookOpen className="h-8 w-8 text-slate-400" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">
-            Loading Create Flashcard...
-          </h2>
-          <p className="text-slate-400 mb-8">
-            Please wait while we prepare the flashcard creation interface.
-          </p>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
-}
-
-// Main exported component with Suspense boundary
-export default function CreateFlashcardPage() {
-  return (
-    <Suspense fallback={<CreateFlashcardLoading />}>
-      <CreateFlashcardPageContent />
-    </Suspense>
   );
 }

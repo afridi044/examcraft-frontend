@@ -42,7 +42,7 @@ export default function TakeQuizPage() {
   const router = useRouter();
   const params = useParams();
   const quizId = params.quizId as string;
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   // Redirect to landing page if not authenticated and not loading
@@ -52,16 +52,11 @@ export default function TakeQuizPage() {
     }
   }, [loading, user, router]);
 
-  // OPTIMIZED: Removed debug logging for performance
-  const { data: quiz, isLoading: quizLoading } = useQuizWithQuestions(quizId);
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
 
-  // Simplified loading logic
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingQuizData = quizLoading && !signingOut;
-  
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
+  // OPTIMIZED: Removed debug logging for performance
+  const { data: quiz, isLoading } = useQuizWithQuestions(quizId);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Map<string, UserAnswer>>(
@@ -247,22 +242,29 @@ export default function TakeQuizPage() {
     }
   };
 
-  if (showLoadingScreen) {
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isDataLoading = isLoading;
+  
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="relative">
-              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
                 <Loader2 className="h-8 w-8 animate-spin text-white" />
               </div>
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-2xl blur-xl"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
             </div>
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Quiz...
             </h2>
             <p className="text-gray-400">
-              Preparing your quiz experience
+              Preparing your quiz questions
             </p>
           </div>
         </div>

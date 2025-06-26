@@ -38,19 +38,8 @@ export default function RootLayout({
         {/* Preload critical resources for faster loading */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        
-        {/* Supabase connection optimization */}
-        <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.com"} />
-        <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.com"} />
-        
-        {/* Additional performance optimizations */}
-        <link rel="dns-prefetch" href="https://api.supabase.com" />
         <link rel="dns-prefetch" href="https://supabase.com" />
-        
         <meta name="theme-color" content="#1f2937" />
-        
-        {/* Resource hints for better performance */}
-        <link rel="prefetch" href="/api/health" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

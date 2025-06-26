@@ -56,7 +56,7 @@ interface QuizAttempt {
 }
 
 export default function QuizHistoryPage() {
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
@@ -109,13 +109,12 @@ export default function QuizHistoryPage() {
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 
-  // Simplified loading logic
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingQuizData = userId && loadingAttempts && !signingOut;
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isDataLoading = userId && loadingAttempts;
   
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingQuizData);
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
 
   // For safer data access with defaults
   const safeQuizAttempts = quizAttempts || [];
@@ -457,7 +456,7 @@ export default function QuizHistoryPage() {
   }, [deletingQuizId, handleDeleteQuiz]);
 
   // Single loading screen for all loading states - matching dashboard pattern
-  if (showLoadingScreen) {
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -472,7 +471,7 @@ export default function QuizHistoryPage() {
               Loading Quiz History...
             </h2>
             <p className="text-gray-400">
-              Retrieving your quiz activity
+              Preparing your quiz performance data
             </p>
           </div>
         </div>

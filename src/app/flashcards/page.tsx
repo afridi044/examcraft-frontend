@@ -360,7 +360,9 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
 };
 
 export default function FlashcardsPage() {
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  
   // Get current user profile data to access database user_id
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const invalidateUserData = useInvalidateUserData();
@@ -375,14 +377,16 @@ export default function FlashcardsPage() {
   // State for topic selection (null = show topics, string = show flashcards for that topic)
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
-  const router = useRouter();
-
-  // Refresh data when flashcards page loads
+  // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
-    if (currentUser?.user_id) {
-      invalidateUserData(currentUser.user_id);
+    if (!loading && !user) {
+      router.push('/');
     }
-  }, [currentUser?.user_id, invalidateUserData]);
+  }, [loading, user, router]);
+
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+  // Data will now update automatically due to improved query settings
 
   const handleCreateFlashcard = (topicId?: string) => {
     if (topicId) {
@@ -531,28 +535,31 @@ export default function FlashcardsPage() {
       }
     };
 
+    const handleFocus = () => {
+      if (currentUser?.user_id) {
+        // Window regained focus, refetch to get latest data
+        refetchFlashcards();
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [currentUser?.user_id, refetchFlashcards]);
 
-  // Redirect to landing page if not authenticated
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [loading, user, router]);
-
-  // Simplified loading logic
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingFlashcardsData = isLoadingFlashcards && !signingOut;
+  // FIXED: Proper loading state handling to prevent flickering
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isDataLoading = currentUser?.user_id && isLoadingFlashcards;
   
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingFlashcardsData);
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
 
-  if (showLoadingScreen) {
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center mt-14 sm:mt-16 md:mt-20">

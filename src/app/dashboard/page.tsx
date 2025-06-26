@@ -21,11 +21,13 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 
 export default function DashboardPage() {
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -37,7 +39,17 @@ export default function DashboardPage() {
   // Use the database user_id
   const userId = currentUser?.user_id || "";
 
-  // OPTIMIZED: Use the new batched dashboard hook for best performance
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
+
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+
+  // OPTIMIZED: Use the new batched dashboard hook for best performance with improved settings
   const dashboardData = useOptimizedDashboard(userId);
   
   // Extract data from the optimized hook
@@ -45,14 +57,12 @@ export default function DashboardPage() {
   const recentActivity = dashboardData.data?.recentActivity || [];
   const topicProgress = dashboardData.data?.topicProgress || [];
 
-  // Simplified loading logic - only show loading when we don't have essential data
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingDashboardData = userId && dashboardData.isLoading && !signingOut;
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isDataLoading = userId && dashboardData.isLoading;
   
-  // Show loading screen only when authenticating or when we have a user but no data yet
-  // Aggressively prevent loading when signing out or when user is null
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingDashboardData);
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
   
   // For safer data access with defaults
   const safeStats = stats || {
@@ -99,7 +109,7 @@ export default function DashboardPage() {
   };
 
   // Single loading screen for all loading states
-  if (showLoadingScreen) {
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">

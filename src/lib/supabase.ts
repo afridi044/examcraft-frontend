@@ -11,18 +11,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Disable verbose auth logging in all environments
     debug: false,
   },
-  // Optimize for better performance and faster connections
+  // Reduce overall client logging
   global: {
     headers: {
-      'X-Client-Info': 'examcraft-frontend',
-      // Add cache control for better performance
-      'Cache-Control': 'max-age=300', // 5 minutes
-    },
-  },
-  // Enable connection pooling optimization
-  db: {
-    schema: 'public',
-  },
+      'X-Client-Info': 'examcraft-frontend'
+    }
+  }
 });
 
 // Import types from centralized database types

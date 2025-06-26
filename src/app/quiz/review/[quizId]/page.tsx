@@ -16,7 +16,6 @@ import {
   RotateCcw,
   CreditCard,
   Check,
-  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -66,10 +65,10 @@ interface ReviewData {
 export default function QuizReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, loading: authLoading, signingOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flashcardStates, setFlashcardStates] = useState<
     Record<string, "idle" | "creating" | "created" | "exists">
@@ -77,20 +76,12 @@ export default function QuizReviewPage() {
 
   const quizId = params.quizId as string;
 
-  // Redirect to landing page if not authenticated
+  // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/');
     }
   }, [authLoading, user, router]);
-
-  // Simplified loading logic
-  const isAuthenticating = authLoading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingReviewData = dataLoading && !signingOut;
-  
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingReviewData);
 
   useEffect(() => {
     if (currentUser && quizId) {
@@ -101,7 +92,7 @@ export default function QuizReviewPage() {
   // OPTIMIZED: Cleaner data fetching with useCallback
   const fetchReviewData = useCallback(async () => {
     try {
-      setDataLoading(true);
+      setLoading(true);
       const url = `/api/quiz/review/${quizId}?userId=${currentUser?.user_id}`;
       const response = await fetch(url);
 
@@ -115,7 +106,7 @@ export default function QuizReviewPage() {
       setError("Failed to load quiz review");
       toast.error("Failed to load quiz review");
     } finally {
-      setDataLoading(false);
+      setLoading(false);
     }
   }, [quizId, currentUser?.user_id]);
 
@@ -201,14 +192,21 @@ export default function QuizReviewPage() {
     }
   };
 
-  if (showLoadingScreen) {
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = authLoading || (authLoading === false && user && userLoading) || (authLoading === false && user && !currentUser);
+  const isDataLoading = loading;
+  
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="relative">
               <div className="h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/50">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
               </div>
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-2xl blur-xl"></div>
             </div>
@@ -216,7 +214,7 @@ export default function QuizReviewPage() {
               Loading Quiz Review...
             </h2>
             <p className="text-gray-400">
-              Preparing your review experience
+              Preparing your quiz analysis
             </p>
           </div>
         </div>

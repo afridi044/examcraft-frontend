@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 
 /**
  * Health Check API Endpoint
  * 
  * This endpoint is used by Docker health checks to verify that the
- * application is running and responsive. Also serves as a connection
- * warmup endpoint for better first-click performance.
+ * application is running and responsive.
  */
 
 export async function GET() {
   try {
-    const startTime = performance.now();
-    
     // Basic health check - verify the application is responding
     const healthData = {
       status: 'healthy',
@@ -29,32 +25,8 @@ export async function GET() {
       config: {
         supabaseConfigured: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
         openRouterConfigured: !!process.env.OPENROUTER_API_KEY,
-      },
-      database: {
-        connected: false,
-        responseTime: 0,
       }
     };
-
-    // Test database connection for warmup
-    try {
-      const dbStartTime = performance.now();
-      const { error } = await supabase.from('users').select('count').limit(1).maybeSingle();
-      const dbEndTime = performance.now();
-      
-      healthData.database = {
-        connected: !error,
-        responseTime: Math.round((dbEndTime - dbStartTime) * 100) / 100,
-      };
-    } catch (dbError) {
-      healthData.database = {
-        connected: false,
-        responseTime: -1,
-      };
-    }
-
-    const totalTime = performance.now() - startTime;
-    healthData.uptime = Math.round(totalTime * 100) / 100;
 
     return NextResponse.json(healthData, { 
       status: 200,

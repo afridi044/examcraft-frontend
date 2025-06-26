@@ -2,7 +2,7 @@
 
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
-import { useCurrentUser } from "@/hooks/useDatabase";
+import { useCurrentUser, QUERY_KEYS } from "@/hooks/useDatabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,10 +46,10 @@ interface SessionStats {
 
 export default function StudySessionPage({ params }: StudySessionPageProps) {
   const router = useRouter();
-  const { user, loading, signingOut } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
-  // Redirect to landing page if user is signed out
+  // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push('/');
@@ -62,16 +62,8 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const [session, setSession] = useState<StudySession | null>(null);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-
-  // Simplified loading logic
-  const isAuthenticating = loading && !signingOut;
-  const isLoadingUserData = userLoading && !signingOut;
-  const isLoadingStudyData = dataLoading && !signingOut;
-  
-  // Show loading screen only when necessary and aggressively prevent during sign out
-  const showLoadingScreen = user && !signingOut && (isAuthenticating || isLoadingUserData || isLoadingStudyData);
 
   // Fixed stats tracking
   const [sessionStats, setSessionStats] = useState<SessionStats>({
@@ -89,7 +81,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const initializeSession = useCallback(
     async (resolvedTopicId: string, userId: string) => {
       try {
-        setDataLoading(true);
+        setIsLoading(true);
         const response = await fetch("/api/flashcards/study-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -111,7 +103,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
       } catch {
         // Silent error handling - user will see "no cards" state
       } finally {
-        setDataLoading(false);
+        setIsLoading(false);
       }
     },
     []
@@ -233,7 +225,14 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
 
         // Invalidate cache for fresh data when navigating back (non-blocking)
         queryClient.invalidateQueries({
-          queryKey: ["flashcards", "user", currentUser?.user_id],
+          queryKey: QUERY_KEYS.userFlashcards(currentUser?.user_id || ""),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.flashcardsDue(currentUser?.user_id || ""),
+        });
+        // Also invalidate dashboard stats for updated progress
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.dashboardStats(currentUser?.user_id || ""),
         });
       }
 
@@ -301,19 +300,31 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
     );
   }
 
-  // Show loading screen only when necessary
-  if (showLoadingScreen) {
+  // OPTIMIZED: Simplified loading state
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isDataLoading = isLoading;
+  
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="h-12 w-12 bg-purple-500 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <Brain className="h-6 w-6 text-white" />
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Brain className="h-8 w-8 text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
             </div>
-            <h2 className="text-lg font-semibold text-white mb-1">
-              Loading Study Session
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Study Session...
             </h2>
-            <p className="text-slate-400 text-sm">Please wait...</p>
+            <p className="text-gray-400">
+              Preparing your flashcards for study
+            </p>
           </div>
         </div>
       </DashboardLayout>
