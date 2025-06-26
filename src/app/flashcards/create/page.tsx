@@ -157,10 +157,6 @@ export default function CreateFlashcardPage() {
 
       // Immediately update cache with optimistic data for instant UI updates
       if (currentUser?.user_id) {
-        console.log("Flashcards created: Updating cache optimistically", {
-          userId: currentUser.user_id,
-        });
-
         // Update dashboard stats immediately
         queryClient.setQueryData(
           ["dashboardStats", currentUser.user_id],
