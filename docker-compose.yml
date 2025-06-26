@@ -1,0 +1,100 @@
+# =============================================================================
+# ExamCraft Frontend - Development Docker Compose
+# =============================================================================
+# This Docker Compose configuration is optimized for development with:
+# - Hot reload support via volume mounts
+# - Environment variable management
+# - Development-specific networking
+# - Easy debugging and logging
+# =============================================================================
+
+# Version attribute removed (obsolete in modern Docker Compose)
+
+services:
+  # ---------------------------------------------------------------------------
+  # ExamCraft Frontend Service
+  # ---------------------------------------------------------------------------
+  examcraft-frontend:
+    # Build configuration
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    
+    # Container name for easy reference
+    container_name: examcraft-frontend-dev
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    # Port mapping (host:container)
+    ports:
+      - "3000:3000"
+    
+    # Environment variables for development
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      # Supabase configuration (loaded from .env.docker)
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    
+    # Environment file for local development
+    env_file:
+      - .env.docker
+    
+    # Volume mounts for hot reload
+    volumes:
+      # Source code volume for hot reload
+      - .:/app:cached
+      # Exclude node_modules to use container's version
+      - /app/node_modules
+      # Exclude .next build directory
+      - /app/.next
+      # Mount package.json for dependency changes
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+    
+    # Restart policy for development
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Development-specific labels
+    labels:
+      - "com.examcraft.environment=development"
+      - "com.examcraft.service=frontend"
+      - "com.examcraft.version=dev"
+
+# -----------------------------------------------------------------------------
+# Networks (Optional: Create custom network for future services)
+# -----------------------------------------------------------------------------
+networks:
+  default:
+    name: examcraft-dev-network
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes (Optional: Named volumes for persistent data)
+# -----------------------------------------------------------------------------
+volumes:
+  node_modules:
+    driver: local
+  next_cache:
+    driver: local 
