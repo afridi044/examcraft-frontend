@@ -46,8 +46,15 @@ interface SessionStats {
 
 export default function StudySessionPage({ params }: StudySessionPageProps) {
   const router = useRouter();
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+
+  // Redirect to landing page if user is signed out
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
   const queryClient = useQueryClient();
 
   const [topicId, setTopicId] = useState<string>("");

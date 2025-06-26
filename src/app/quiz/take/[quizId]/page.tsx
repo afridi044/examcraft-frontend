@@ -42,8 +42,15 @@ export default function TakeQuizPage() {
   const router = useRouter();
   const params = useParams();
   const quizId = params.quizId as string;
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { data: currentUser } = useCurrentUser();
+
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
 
   // OPTIMIZED: Removed debug logging for performance
   const { data: quiz, isLoading } = useQuizWithQuestions(quizId);

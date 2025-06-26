@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -30,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCurrentUser,
   useDeleteQuiz,
@@ -59,6 +60,8 @@ export default function QuizHistoryPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
+  const queryClient = useQueryClient();
+  const router = useRouter();
   
   // UI state
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,6 +75,13 @@ export default function QuizHistoryPage() {
 
   // Use the database user_id
   const userId = currentUser?.user_id || "";
+
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
 
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
@@ -99,11 +109,11 @@ export default function QuizHistoryPage() {
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 
-  // Consolidated loading logic - show main loading until we have essential data
-  const isMainLoading = loading || !user || userLoading || !currentUser;
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
   const isDataLoading = userId && loadingAttempts;
   
-  // Show full loading screen for both auth and initial data load
+  // Show full loading screen for both auth and initial data load, but not during sign out
   const showFullLoadingScreen = isMainLoading || isDataLoading;
 
   // For safer data access with defaults
@@ -289,7 +299,19 @@ export default function QuizHistoryPage() {
       const result = await deleteQuizMutation.mutateAsync(quizId);
       if (result.success) {
         toast.success("Quiz deleted successfully!");
-        // Invalidate all user data to refresh the dashboard
+        
+        // Optimistically update the cache by removing the deleted quiz immediately
+        queryClient.setQueryData(["quiz-attempts", userId], (oldData: QuizAttempt[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.filter(attempt => attempt.quiz_id !== quizId);
+        });
+        
+        // Also invalidate the query to ensure consistency with server
+        await queryClient.invalidateQueries({
+          queryKey: ["quiz-attempts", userId]
+        });
+        
+        // Also invalidate general user data for dashboard consistency
         if (userId) {
           invalidateUserData(userId);
         }
@@ -299,10 +321,15 @@ export default function QuizHistoryPage() {
     } catch (error) {
       console.error("Delete quiz error:", error);
       toast.error("Failed to delete quiz");
+      
+      // On error, invalidate to ensure cache is consistent with server state
+      await queryClient.invalidateQueries({
+        queryKey: ["quiz-attempts", userId]
+      });
     } finally {
       setDeletingQuizId(null);
     }
-  }, [deleteQuizMutation, userId, invalidateUserData]);
+  }, [deleteQuizMutation, userId, invalidateUserData, queryClient]);
 
   const getActionButton = useCallback((attempt: QuizAttempt) => {
     const isDeleting = deletingQuizId === attempt.quiz_id;
