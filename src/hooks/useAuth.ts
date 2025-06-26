@@ -3,12 +3,34 @@
 import { useState, useEffect } from "react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
+import { performCompleteWarmup } from "@/lib/connection-warmup";
+import { db } from "@/lib/database";
 
 export function useAuth() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Helper function to trigger data prefetching for authenticated users
+  const triggerUserDataPrefetch = async (authUser: SupabaseUser) => {
+    try {
+      // Get user profile to get the user_id for prefetching
+      const response = await db.users.getCurrentUser();
+      if (response.success && response.data) {
+        // Trigger immediate prefetching to warm up queries
+        performCompleteWarmup(queryClient, {
+          warmupConnection: false, // Already warmed up at app start
+          prefetchCriticalData: true,
+          userId: response.data.user_id,
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to trigger user data prefetch:', error);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -37,6 +59,11 @@ export function useAuth() {
           setUser(session?.user ?? null);
           setLoading(false);
           setInitialized(true);
+          
+          // Trigger prefetching if user is authenticated
+          if (session?.user) {
+            triggerUserDataPrefetch(session.user);
+          }
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
@@ -83,6 +110,11 @@ export function useAuth() {
 
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Trigger prefetching for newly authenticated users
+        if (session?.user && event === 'SIGNED_IN') {
+          triggerUserDataPrefetch(session.user);
+        }
       }
     });
 

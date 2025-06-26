@@ -1,8 +1,9 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, lazy, Suspense, useMemo } from "react";
+import { useState, lazy, Suspense, useMemo, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
+import { initializeAppWarmup } from "@/lib/connection-warmup";
 
 // Dynamically import devtools only in development - optimized
 const ReactQueryDevtools = lazy(() =>
@@ -23,9 +24,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             // Optimized for performance - balance between fresh data and performance
             staleTime: 2 * 60 * 1000, // 2 minutes - reasonable balance
-            gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
+            gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache longer for better first-click performance
             refetchOnWindowFocus: false, // Disabled for better performance
-            refetchOnMount: true, // IMPORTANT: Enable initial data fetching
+            refetchOnMount: false, // Use cached data when possible for faster loading
+            refetchOnReconnect: true, // Refetch when connection is restored
             retry: (failureCount, error) => {
               // Don't retry on 4xx errors
               if (error && typeof error === "object" && "status" in error) {
@@ -37,6 +39,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
               // Retry up to 2 times for other errors (reduced from 3)
               return failureCount < 2;
             },
+            // Enable placeholderData to show stale content while refetching
+            placeholderData: (previousData: any) => previousData,
           },
           mutations: {
             retry: false, // Don't retry mutations by default
@@ -44,6 +48,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         },
       })
   );
+
+  // Initialize connection warmup on app start
+  useEffect(() => {
+    // Start warmup process to eliminate first-click slowness
+    initializeAppWarmup(queryClient);
+  }, [queryClient]);
 
   // Memoize toast options to prevent recreation on every render
   const toastOptions = useMemo(

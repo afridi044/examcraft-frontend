@@ -543,8 +543,8 @@ export function useTopicProgress(userId: string) {
 // Compound Hooks (Multiple Operations)
 // =============================================
 
-export function useDashboardData(userId: string, useOptimized: boolean = false) {
-  // OPTIMIZED VERSION: Single batched call
+export function useDashboardData(userId: string, useOptimized: boolean = true) {
+  // OPTIMIZED VERSION: Single batched call (now default)
   const optimizedResult = useOptimizedDashboard(userId);
   
   // LEGACY VERSION: Individual hooks (for backward compatibility)
@@ -685,7 +685,7 @@ export function usePrefetchUserData() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    (userId: string, useOptimized: boolean = false) => {
+    (userId: string, useOptimized: boolean = true) => {
       // Only prefetch if data is not already cached and fresh
       const prefetchIfStale = (queryKey: readonly unknown[], queryFn: () => Promise<any>, staleTime: number) => {
         const query = queryClient.getQueryData(queryKey);
