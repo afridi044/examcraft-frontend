@@ -45,13 +45,14 @@ export default function DashboardPage() {
   const recentActivity = dashboardData.data?.recentActivity || [];
   const topicProgress = dashboardData.data?.topicProgress || [];
 
-  // Consolidated loading logic - show main loading until we have essential data
-  const isMainLoading = loading || !user || userLoading || !currentUser;
-  const isDataLoading = dashboardData.isLoading;
+  // Simplified loading logic - only show loading when we don't have essential data
+  const isAuthenticating = loading || !user;
+  const isLoadingUserData = userLoading || !currentUser;
+  const isLoadingDashboardData = userId && dashboardData.isLoading;
   
-  // Show full loading screen for both auth and initial data load
-  // But not when signing out
-  const showFullLoadingScreen = !signingOut && user && (isMainLoading || (userId && isDataLoading));
+  // Show loading screen only when authenticating or when we have a user but no data yet
+  // Don't show loading when signing out
+  const showLoadingScreen = !signingOut && (isAuthenticating || isLoadingUserData || isLoadingDashboardData);
   
   // For safer data access with defaults
   const safeStats = stats || {
@@ -98,7 +99,7 @@ export default function DashboardPage() {
   };
 
   // Single loading screen for all loading states
-  if (showFullLoadingScreen) {
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">

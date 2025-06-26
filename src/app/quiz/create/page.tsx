@@ -95,10 +95,14 @@ export default function CreateQuizPage() {
     }
   }, [loading, user, router]);
 
-  // Only show loading for authentication, not for user data
-  const isAuthLoading = loading;
+  // Simplified loading logic
+  const isAuthenticating = loading || !user;
+  const isLoadingUserData = userLoading || !currentUser;
   
-  if (isAuthLoading) {
+  // Show loading screen only when necessary
+  const showLoadingScreen = isAuthenticating || isLoadingUserData;
+  
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">

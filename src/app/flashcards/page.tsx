@@ -537,11 +537,22 @@ export default function FlashcardsPage() {
     };
   }, [currentUser?.user_id, refetchFlashcards]);
 
-  // FIXED: Proper loading state handling to prevent flickering
-  // Show loading state while auth user, database user, or flashcards are loading
-  const isLoading = loading || userLoading || !user || isLoadingFlashcards;
+  // Redirect to landing page if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
 
-  if (isLoading) {
+  // Simplified loading logic
+  const isAuthenticating = loading || !user;
+  const isLoadingUserData = userLoading || !currentUser;
+  const isLoadingFlashcardsData = isLoadingFlashcards;
+  
+  // Show loading screen only when necessary
+  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingFlashcardsData;
+
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center mt-14 sm:mt-16 md:mt-20">

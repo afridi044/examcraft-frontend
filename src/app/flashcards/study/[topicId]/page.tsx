@@ -55,14 +55,23 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
       router.push('/');
     }
   }, [loading, user, router]);
+  
   const queryClient = useQueryClient();
 
   const [topicId, setTopicId] = useState<string>("");
   const [session, setSession] = useState<StudySession | null>(null);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Simplified loading logic
+  const isAuthenticating = loading || !user;
+  const isLoadingUserData = userLoading || !currentUser;
+  const isLoadingStudyData = dataLoading;
+  
+  // Show loading screen only when necessary
+  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingStudyData;
 
   // Fixed stats tracking
   const [sessionStats, setSessionStats] = useState<SessionStats>({
@@ -80,7 +89,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const initializeSession = useCallback(
     async (resolvedTopicId: string, userId: string) => {
       try {
-        setIsLoading(true);
+        setDataLoading(true);
         const response = await fetch("/api/flashcards/study-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -102,7 +111,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
       } catch {
         // Silent error handling - user will see "no cards" state
       } finally {
-        setIsLoading(false);
+        setDataLoading(false);
       }
     },
     []
@@ -292,8 +301,8 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
     );
   }
 
-  // OPTIMIZED: Simplified loading state
-  if (loading || userLoading || isLoading) {
+  // Show loading screen only when necessary
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">

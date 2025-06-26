@@ -43,7 +43,7 @@ export default function TakeQuizPage() {
   const params = useParams();
   const quizId = params.quizId as string;
   const { user, loading } = useAuth();
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
@@ -53,7 +53,15 @@ export default function TakeQuizPage() {
   }, [loading, user, router]);
 
   // OPTIMIZED: Removed debug logging for performance
-  const { data: quiz, isLoading } = useQuizWithQuestions(quizId);
+  const { data: quiz, isLoading: quizLoading } = useQuizWithQuestions(quizId);
+
+  // Simplified loading logic
+  const isAuthenticating = loading || !user;
+  const isLoadingUserData = userLoading || !currentUser;
+  const isLoadingQuizData = quizLoading;
+  
+  // Show loading screen only when necessary
+  const showLoadingScreen = isAuthenticating || isLoadingUserData || isLoadingQuizData;
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Map<string, UserAnswer>>(
@@ -239,13 +247,23 @@ export default function TakeQuizPage() {
     }
   };
 
-  if (isLoading) {
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
-            <p className="text-gray-400">Loading quiz...</p>
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz...
+            </h2>
+            <p className="text-gray-400">
+              Preparing your quiz experience
+            </p>
           </div>
         </div>
       </DashboardLayout>
