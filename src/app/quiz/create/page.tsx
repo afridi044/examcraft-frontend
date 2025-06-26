@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,6 @@ import {
   useInvalidateUserData,
 } from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardStats, RecentActivity, Quiz } from "@/types/database";
 import {
   Brain,
   Loader2,
@@ -43,18 +41,12 @@ interface QuizGenerationForm {
 export default function CreateQuizPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  // Load topics in background - not blocking the UI
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
-  const queryClient = useQueryClient();
 
-  // Redirect to landing page if not authenticated and not loading
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [loading, user, router]);
-
+  // All useState hooks must be at the top, before any conditional logic
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedQuiz, setGeneratedQuiz] = useState<{
     quiz_id: string;
@@ -72,22 +64,15 @@ export default function CreateQuizPage() {
     additional_instructions: "",
   });
 
-  const difficultyLevels = [
-    { value: 1, label: "Beginner", color: "text-green-400" },
-    { value: 2, label: "Easy", color: "text-blue-400" },
-    { value: 3, label: "Medium", color: "text-yellow-400" },
-    { value: 4, label: "Hard", color: "text-orange-400" },
-    { value: 5, label: "Expert", color: "text-red-400" },
-  ];
-
-  const handleInputChange = (
+  // All useCallback hooks must also be at the top
+  const handleInputChange = useCallback((
     field: keyof QuizGenerationForm,
     value: string | number | string[]
   ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     if (!form.title.trim()) {
       toast.error("Quiz title is required");
       return false;
@@ -101,7 +86,48 @@ export default function CreateQuizPage() {
       return false;
     }
     return true;
-  };
+  }, [form.title, form.topic_id, form.custom_topic, form.num_questions]);
+
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
+
+  // Only show loading for authentication, not for user data
+  const isAuthLoading = loading;
+  
+  if (isAuthLoading) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz Creator...
+            </h2>
+            <p className="text-gray-400">
+              Preparing your AI-powered quiz generator
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const difficultyLevels = [
+    { value: 1, label: "Beginner", color: "text-green-400" },
+    { value: 2, label: "Easy", color: "text-blue-400" },
+    { value: 3, label: "Medium", color: "text-yellow-400" },
+    { value: 4, label: "Hard", color: "text-orange-400" },
+    { value: 5, label: "Expert", color: "text-red-400" },
+  ];
 
   const handleGenerateQuiz = async () => {
     if (!validateForm() || !currentUser) return;
@@ -129,60 +155,8 @@ export default function CreateQuizPage() {
 
       toast.success("Quiz generated successfully!");
 
-      // Immediately update cache with optimistic data for instant UI updates
+      // Simple background data refresh - much faster than complex cache updates
       if (currentUser?.user_id) {
-        // Update dashboard stats immediately
-        queryClient.setQueryData(
-          ["dashboardStats", currentUser.user_id],
-          (oldData: DashboardStats | undefined) => {
-            if (oldData) {
-              return {
-                ...oldData,
-                totalQuizzes: (oldData.totalQuizzes || 0) + 1,
-              };
-            }
-            return oldData;
-          }
-        );
-
-        // Update user quizzes list immediately
-        queryClient.setQueryData(
-          ["userQuizzes", currentUser.user_id],
-          (oldData: Quiz[] | undefined) => {
-            if (oldData) {
-              const newQuiz: Quiz = {
-                quiz_id: result.quiz.quiz_id,
-                title: result.quiz.title,
-                description: result.quiz.description,
-                topic_id: result.quiz.topic_id,
-                user_id: currentUser.user_id,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-              return [newQuiz, ...oldData];
-            }
-            return oldData;
-          }
-        );
-
-        // Update recent activity immediately
-        queryClient.setQueryData(
-          ["recentActivity", currentUser.user_id],
-          (oldData: RecentActivity[] | undefined) => {
-            if (oldData) {
-              const newActivity: RecentActivity = {
-                id: `temp-${Date.now()}`,
-                type: "quiz",
-                title: `Created quiz: ${result.quiz.title}`,
-                completed_at: new Date().toISOString(),
-              };
-              return [newActivity, ...oldData.slice(0, 9)]; // Keep only 10 items
-            }
-            return oldData;
-          }
-        );
-
-        // Also invalidate for background refresh to ensure data consistency
         invalidateUserData(currentUser.user_id);
       }
 
@@ -203,9 +177,9 @@ export default function CreateQuizPage() {
 
   // Show success screen if quiz was generated
   if (generatedQuiz) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-4xl mx-auto p-20 space-y-8">
+  return (
+    <DashboardLayout>
+      <div className="max-w-4xl mx-auto p-20 space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -543,13 +517,18 @@ export default function CreateQuizPage() {
               <div className="pt-6 border-t border-gray-700">
                 <Button
                   onClick={handleGenerateQuiz}
-                  disabled={isGenerating}
+                  disabled={isGenerating || userLoading || !currentUser}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span>Generating Quiz...</span>
+                    </div>
+                  ) : userLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Loading...</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2">

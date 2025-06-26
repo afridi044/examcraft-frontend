@@ -4,12 +4,10 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCurrentUser,
-  useDashboardStats,
-  useRecentActivity,
-  useTopicProgress,
+  useDashboardData,
+  useOptimizedDashboard,
 } from "@/hooks/useDatabase";
 import {
   BookOpen,
@@ -23,12 +21,11 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  const router = useRouter();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -40,23 +37,19 @@ export default function DashboardPage() {
   // Use the database user_id
   const userId = currentUser?.user_id || "";
 
-  // Redirect to landing page if not authenticated and not loading
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [loading, user, router]);
-
-  // Fetch dashboard data - only when we have a userId
-  const { data: stats, isLoading: statsLoading } = useDashboardStats(userId);
-  const { data: recentActivity, isLoading: activityLoading } = useRecentActivity(userId);
-  const { data: topicProgress, isLoading: progressLoading } = useTopicProgress(userId);
-
-  // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
-  const isDataLoading = statsLoading || activityLoading || progressLoading;
+  // OPTIMIZED: Use the new batched dashboard hook for best performance
+  const dashboardData = useOptimizedDashboard(userId);
   
-  // Show full loading screen for both auth and initial data load, but not during sign out
+  // Extract data from the optimized hook
+  const stats = dashboardData.data?.stats;
+  const recentActivity = dashboardData.data?.recentActivity || [];
+  const topicProgress = dashboardData.data?.topicProgress || [];
+
+  // Consolidated loading logic - show main loading until we have essential data
+  const isMainLoading = loading || !user || userLoading || !currentUser;
+  const isDataLoading = dashboardData.isLoading;
+  
+  // Show full loading screen for both auth and initial data load
   const showFullLoadingScreen = isMainLoading || (userId && isDataLoading);
   
   // For safer data access with defaults
@@ -415,7 +408,7 @@ export default function DashboardPage() {
                 {(showAllProgress
                   ? safeTopicProgress
                   : safeTopicProgress.slice(0, 3)
-                ).map((topic) => (
+                ).map((topic: any) => (
                   <div
                     key={topic.topic_id}
                     className="group flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"

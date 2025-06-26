@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
@@ -11,7 +11,6 @@ import {
   Zap,
   Users,
   Layers,
-  Settings,
   Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +25,6 @@ import {
   useInvalidateUserData,
 } from "@/hooks/useDatabase";
 import { toast } from "react-hot-toast";
-import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardStats, RecentActivity } from "@/types/database";
 
 interface FlashcardGenerationForm {
   topic_id: string;
@@ -44,18 +40,11 @@ export default function CreateFlashcardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const { data: topics } = useTopics();
   const invalidateUserData = useInvalidateUserData();
-  const queryClient = useQueryClient();
 
-  // Redirect to landing page if not authenticated and not loading
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [loading, user, router]);
-
+  // State management
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedFlashcards, setGeneratedFlashcards] = useState<{
     topic_id: string;
@@ -78,34 +67,15 @@ export default function CreateFlashcardPage() {
 
   const [numFlashcardsInput, setNumFlashcardsInput] = useState("10");
 
-  const difficultyLevels = [
-    { value: 1, label: "Beginner", color: "text-green-400" },
-    { value: 2, label: "Easy", color: "text-blue-400" },
-    { value: 3, label: "Medium", color: "text-yellow-400" },
-    { value: 4, label: "Hard", color: "text-orange-400" },
-    { value: 5, label: "Expert", color: "text-red-400" },
-  ];
-
-  // Set initial topic name if preselected topic exists
-  useEffect(() => {
-    if (preselectedTopicId && topics && topics.length > 0) {
-      const selectedTopic = topics.find(
-        (t) => t.topic_id === preselectedTopicId
-      );
-      if (selectedTopic) {
-        setForm((prev) => ({ ...prev, topic_name: selectedTopic.name }));
-      }
-    }
-  }, [preselectedTopicId, topics]);
-
-  const handleInputChange = (
+  // Optimized form handlers with useCallback
+  const handleInputChange = useCallback((
     field: keyof FlashcardGenerationForm,
     value: string | number
   ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const topicName = form.topic_id
       ? topics?.find((t) => t.topic_id === form.topic_id)?.name
       : form.custom_topic.trim();
@@ -119,9 +89,9 @@ export default function CreateFlashcardPage() {
       return false;
     }
     return true;
-  };
+  }, [form.topic_id, form.custom_topic, form.num_flashcards, topics]);
 
-  const handleGenerateFlashcards = async () => {
+  const handleGenerateFlashcards = useCallback(async () => {
     if (!validateForm() || !currentUser) return;
 
     setIsGenerating(true);
@@ -164,42 +134,8 @@ export default function CreateFlashcardPage() {
         );
       }
 
-      // Immediately update cache with optimistic data for instant UI updates
+      // Simplified cache invalidation - just invalidate user data
       if (currentUser?.user_id) {
-        // Update dashboard stats immediately
-        queryClient.setQueryData(
-          ["dashboardStats", currentUser.user_id],
-          (oldData: DashboardStats | undefined) => {
-            if (oldData) {
-              return {
-                ...oldData,
-                totalFlashcards:
-                  (oldData.totalFlashcards || 0) + data.generated_count,
-              };
-            }
-            return oldData;
-          }
-        );
-
-        // Update recent activity immediately
-        queryClient.setQueryData(
-          ["recentActivity", currentUser.user_id],
-          (oldData: RecentActivity[] | undefined) => {
-            if (oldData) {
-              const newActivity: RecentActivity = {
-                id: `temp-${Date.now()}`,
-                type: "flashcard",
-                title: `Created ${data.generated_count} flashcards: ${data.topic_name}`,
-                completed_at: new Date().toISOString(),
-                topic: data.topic_name,
-              };
-              return [newActivity, ...oldData.slice(0, 9)]; // Keep only 10 items
-            }
-            return oldData;
-          }
-        );
-
-        // Also invalidate for background refresh to ensure data consistency
         invalidateUserData(currentUser.user_id);
       }
 
@@ -216,18 +152,67 @@ export default function CreateFlashcardPage() {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [validateForm, currentUser, topics, form, invalidateUserData]);
+
+  // Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [loading, user, router]);
+
+  // Set initial topic name if preselected topic exists
+  useEffect(() => {
+    if (preselectedTopicId && topics && topics.length > 0) {
+      const selectedTopic = topics.find(
+        (t) => t.topic_id === preselectedTopicId
+      );
+      if (selectedTopic) {
+        setForm((prev) => ({ ...prev, topic_name: selectedTopic.name }));
+      }
+    }
+  }, [preselectedTopicId, topics]);
+
+  // Add loading state for better UX - only for authentication
+  const isAuthLoading = loading;
+  
+  if (isAuthLoading) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Flashcard Creator...
+            </h2>
+            <p className="text-gray-400">
+              Preparing your learning tools
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const difficultyLevels = [
+    { value: 1, label: "Beginner", color: "text-green-400" },
+    { value: 2, label: "Easy", color: "text-blue-400" },
+    { value: 3, label: "Medium", color: "text-yellow-400" },
+    { value: 4, label: "Hard", color: "text-orange-400" },
+    { value: 5, label: "Expert", color: "text-red-400" },
+  ];
 
   // Show success screen if flashcards were generated
   if (generatedFlashcards) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-4xl mx-auto p-20 space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8"
-          >
+  return (
+    <DashboardLayout>
+      <div className="max-w-4xl mx-auto p-20 space-y-8">
+          <div className="text-center space-y-8">
             {/* Success Header */}
             <div className="space-y-4">
               <div className="flex items-center justify-center space-x-3">
@@ -314,7 +299,7 @@ export default function CreateFlashcardPage() {
                 </div>
               </div>
             </Card>
-          </motion.div>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -324,11 +309,7 @@ export default function CreateFlashcardPage() {
     <DashboardLayout>
       <div className="max-w-5xl mx-auto p-20 space-y-8">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4"
-        >
+        <div className="text-center space-y-4">
           <div className="flex items-center justify-center space-x-3">
             <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
               <Layers className="h-6 w-6 text-white" />
@@ -342,14 +323,10 @@ export default function CreateFlashcardPage() {
             content, and our AI will generate effective study materials
             optimized for active recall.
           </p>
-        </motion.div>
+        </div>
 
         {/* Main Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        <div>
           <Card className="bg-gray-800/50 border-gray-700/50 p-8">
             <div className="space-y-8">
               {/* Topic Information */}
@@ -424,7 +401,7 @@ export default function CreateFlashcardPage() {
               <div className="space-y-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="h-8 w-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                    <Settings className="h-4 w-4 text-white" />
+                    <Brain className="h-4 w-4 text-white" />
                   </div>
                   <h2 className="text-xl font-bold text-white">
                     Flashcard Configuration
@@ -562,13 +539,18 @@ export default function CreateFlashcardPage() {
               <div className="pt-6 border-t border-gray-700">
                 <Button
                   onClick={handleGenerateFlashcards}
-                  disabled={isGenerating}
+                  disabled={isGenerating || userLoading || !currentUser}
                   className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span>Generating Flashcards...</span>
+                    </div>
+                  ) : userLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Loading...</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2">
@@ -580,14 +562,10 @@ export default function CreateFlashcardPage() {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Tips Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <div>
           <Card className="bg-gradient-to-r from-teal-500/10 to-blue-500/10 border-teal-500/20 p-6">
             <div className="flex items-start space-x-4">
               <div className="h-8 w-8 bg-gradient-to-br from-teal-500 to-blue-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
@@ -610,7 +588,7 @@ export default function CreateFlashcardPage() {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </DashboardLayout>
   );

@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCurrentUser,
   useDeleteQuiz,
@@ -60,6 +60,7 @@ export default function QuizHistoryPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
+  const queryClient = useQueryClient();
   const router = useRouter();
   
   // UI state
@@ -298,7 +299,19 @@ export default function QuizHistoryPage() {
       const result = await deleteQuizMutation.mutateAsync(quizId);
       if (result.success) {
         toast.success("Quiz deleted successfully!");
-        // Invalidate all user data to refresh the dashboard
+        
+        // Optimistically update the cache by removing the deleted quiz immediately
+        queryClient.setQueryData(["quiz-attempts", userId], (oldData: QuizAttempt[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.filter(attempt => attempt.quiz_id !== quizId);
+        });
+        
+        // Also invalidate the query to ensure consistency with server
+        await queryClient.invalidateQueries({
+          queryKey: ["quiz-attempts", userId]
+        });
+        
+        // Also invalidate general user data for dashboard consistency
         if (userId) {
           invalidateUserData(userId);
         }
@@ -308,10 +321,15 @@ export default function QuizHistoryPage() {
     } catch (error) {
       console.error("Delete quiz error:", error);
       toast.error("Failed to delete quiz");
+      
+      // On error, invalidate to ensure cache is consistent with server state
+      await queryClient.invalidateQueries({
+        queryKey: ["quiz-attempts", userId]
+      });
     } finally {
       setDeletingQuizId(null);
     }
-  }, [deleteQuizMutation, userId, invalidateUserData]);
+  }, [deleteQuizMutation, userId, invalidateUserData, queryClient]);
 
   const getActionButton = useCallback((attempt: QuizAttempt) => {
     const isDeleting = deletingQuizId === attempt.quiz_id;

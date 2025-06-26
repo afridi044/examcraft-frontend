@@ -377,13 +377,6 @@ export default function FlashcardsPage() {
 
   const router = useRouter();
 
-  // Redirect to landing page if not authenticated and not loading
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [loading, user, router]);
-
   // Refresh data when flashcards page loads
   useEffect(() => {
     if (currentUser?.user_id) {
@@ -544,10 +537,9 @@ export default function FlashcardsPage() {
     };
   }, [currentUser?.user_id, refetchFlashcards]);
 
-  // FIXED: Improved loading state handling to prevent flickering during sign out
+  // FIXED: Proper loading state handling to prevent flickering
   // Show loading state while auth user, database user, or flashcards are loading
-  // But don't show loading when user is signing out (loading=false, user=null)
-  const isLoading = loading || (loading === false && user && (userLoading || isLoadingFlashcards));
+  const isLoading = loading || userLoading || !user || isLoadingFlashcards;
 
   if (isLoading) {
     return (

@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { db } from "@/lib/database";
+import { optimizedAnalyticsService } from "@/lib/optimized-analytics";
 import type {
   CreateTopicInput,
   CreateQuestionInput,
@@ -462,9 +463,34 @@ export function useUserAnswers(
 }
 
 // =============================================
-// Analytics Hooks
+// Analytics Hooks (OPTIMIZED & LEGACY)
 // =============================================
 
+// NEW: OPTIMIZED BATCH DASHBOARD HOOK - Use this for best performance
+export function useOptimizedDashboard(userId: string) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.dashboardStats(userId), 'batch'],
+    queryFn: () => optimizedAnalyticsService.getAllDashboardData(userId),
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+    refetchInterval: false,
+    // Show cached data immediately while fetching fresh data
+    placeholderData: (previousData) => previousData,
+    select: (data) => ({
+      stats: data.stats.data,
+      recentActivity: data.recentActivity.data || [],
+      topicProgress: data.topicProgress.data || [],
+      isLoading: false,
+      isError: !data.stats.success || !data.recentActivity.success || !data.topicProgress.success,
+      error: data.stats.error || data.recentActivity.error || data.topicProgress.error,
+    }),
+  });
+}
+
+// LEGACY: Individual hooks - still using optimized backend but separate React Query calls
 export function useDashboardStats(userId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.dashboardStats(userId),
@@ -517,8 +543,11 @@ export function useTopicProgress(userId: string) {
 // Compound Hooks (Multiple Operations)
 // =============================================
 
-export function useDashboardData(userId: string) {
-  // Always call hooks in the same order
+export function useDashboardData(userId: string, useOptimized: boolean = false) {
+  // OPTIMIZED VERSION: Single batched call
+  const optimizedResult = useOptimizedDashboard(userId);
+  
+  // LEGACY VERSION: Individual hooks (for backward compatibility)
   const stats = useDashboardStats(userId);
   const recentActivity = useRecentActivity(userId);
   const topicProgress = useTopicProgress(userId);
@@ -552,6 +581,34 @@ export function useDashboardData(userId: string) {
       return emptyState;
     }
 
+    // Use optimized version if requested
+    if (useOptimized) {
+      return {
+        stats: { 
+          data: optimizedResult.data?.stats, 
+          isLoading: optimizedResult.isLoading, 
+          isError: optimizedResult.isError, 
+          error: optimizedResult.error 
+        },
+        recentActivity: { 
+          data: optimizedResult.data?.recentActivity || [], 
+          isLoading: optimizedResult.isLoading, 
+          isError: optimizedResult.isError, 
+          error: optimizedResult.error 
+        },
+        topicProgress: { 
+          data: optimizedResult.data?.topicProgress || [], 
+          isLoading: optimizedResult.isLoading, 
+          isError: optimizedResult.isError, 
+          error: optimizedResult.error 
+        },
+        isLoading: optimizedResult.isLoading,
+        isError: optimizedResult.isError,
+        error: optimizedResult.error,
+      };
+    }
+
+    // Legacy version: separate hooks
     return {
       stats,
       recentActivity,
@@ -561,7 +618,7 @@ export function useDashboardData(userId: string) {
       isError: stats.isError || recentActivity.isError || topicProgress.isError,
       error: stats.error || recentActivity.error || topicProgress.error,
     };
-  }, [userId, stats, recentActivity, topicProgress, emptyState]);
+  }, [userId, useOptimized, optimizedResult, stats, recentActivity, topicProgress, emptyState]);
 }
 
 export function useUserContent(userId: string) {
@@ -628,7 +685,7 @@ export function usePrefetchUserData() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    (userId: string) => {
+    (userId: string, useOptimized: boolean = false) => {
       // Only prefetch if data is not already cached and fresh
       const prefetchIfStale = (queryKey: readonly unknown[], queryFn: () => Promise<any>, staleTime: number) => {
         const query = queryClient.getQueryData(queryKey);
@@ -644,24 +701,33 @@ export function usePrefetchUserData() {
         }
       };
 
-      // Prefetch essential dashboard data for instant loading
-      prefetchIfStale(
-        QUERY_KEYS.dashboardStats(userId),
-        () => db.analytics.getDashboardStats(userId),
-        2 * 60 * 1000 // 2 minutes
-      );
+      if (useOptimized) {
+        // OPTIMIZED: Prefetch all dashboard data in one batch call
+        prefetchIfStale(
+          [...QUERY_KEYS.dashboardStats(userId), 'batch'],
+          () => optimizedAnalyticsService.getAllDashboardData(userId),
+          2 * 60 * 1000 // 2 minutes
+        );
+      } else {
+        // LEGACY: Prefetch individual dashboard data
+        prefetchIfStale(
+          QUERY_KEYS.dashboardStats(userId),
+          () => db.analytics.getDashboardStats(userId),
+          2 * 60 * 1000 // 2 minutes
+        );
 
-      prefetchIfStale(
-        QUERY_KEYS.recentActivity(userId),
-        () => db.analytics.getRecentActivity(userId, 10),
-        2 * 60 * 1000 // 2 minutes
-      );
+        prefetchIfStale(
+          QUERY_KEYS.recentActivity(userId),
+          () => db.analytics.getRecentActivity(userId, 10),
+          2 * 60 * 1000 // 2 minutes
+        );
 
-      prefetchIfStale(
-        QUERY_KEYS.topicProgress(userId),
-        () => db.analytics.getTopicProgress(userId),
-        5 * 60 * 1000 // 5 minutes
-      );
+        prefetchIfStale(
+          QUERY_KEYS.topicProgress(userId),
+          () => db.analytics.getTopicProgress(userId),
+          5 * 60 * 1000 // 5 minutes
+        );
+      }
 
       // Also prefetch user quizzes for faster navigation
       prefetchIfStale(
