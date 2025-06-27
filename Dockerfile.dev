@@ -14,10 +14,10 @@ FROM node:20.11.1-alpine AS base
 # Install dependencies for development
 RUN apk update && apk upgrade && \
     apk add --no-cache \
-        libc6-compat \
-        dumb-init \
-        git \
-        openssh \
+    libc6-compat \
+    dumb-init \
+    git \
+    openssh \
     && rm -rf /var/cache/apk/*
 
 # Set working directory
@@ -47,11 +47,9 @@ USER nextjs
 # Expose port for development server
 EXPOSE 3000
 
-# Set development environment variables
-ENV NODE_ENV=development \
-    NEXT_TELEMETRY_DISABLED=1 \
-    CHOKIDAR_USEPOLLING=true \
-    WATCHPACK_POLLING=true
+# Set production environment variables
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
 
 # Health check for development
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
@@ -60,8 +58,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start development server with hot reload
-CMD ["npm", "run", "dev"]
+# Start production server
+CMD ["npm", "run", "start"]
 
 # =============================================================================
 # Development stage that can be targeted from docker-compose
