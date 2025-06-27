@@ -6,6 +6,7 @@ import {
   useUserFlashcards,
   useCurrentUser,
   useInvalidateUserData,
+  usePrefetchCreatePages,
 } from "@/hooks/useDatabase";
 import {
   Loader2,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { FlashcardWithTopic, Topic } from "@/types/database";
 
 // Type for FlashCard props
@@ -360,14 +361,14 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
 };
 
 export default function FlashcardsPage() {
-  const { user, loading } = useAuth();
   const router = useRouter();
-  
-  // Get current user profile data to access database user_id
+  const searchParams = useSearchParams();
+  const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const invalidateUserData = useInvalidateUserData();
+  const prefetchCreatePages = usePrefetchCreatePages();
 
-  // Use the database user_id instead of the Supabase auth user ID
+  // Get current user profile data to access database user_id
   const {
     data: flashcards,
     isLoading: isLoadingFlashcards,
@@ -380,7 +381,7 @@ export default function FlashcardsPage() {
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
@@ -389,6 +390,11 @@ export default function FlashcardsPage() {
   // Data will now update automatically due to improved query settings
 
   const handleCreateFlashcard = (topicId?: string) => {
+    // Prefetch create page data before navigation
+    prefetchCreatePages().catch((err) =>
+      console.warn("Create flashcard prefetch failed:", err)
+    );
+
     if (topicId) {
       router.push(`/flashcards/create?topic_id=${topicId}`);
     } else {
@@ -544,7 +550,7 @@ export default function FlashcardsPage() {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
-    
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);
@@ -553,9 +559,12 @@ export default function FlashcardsPage() {
 
   // FIXED: Proper loading state handling to prevent flickering
   // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isMainLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
   const isDataLoading = currentUser?.user_id && isLoadingFlashcards;
-  
+
   // Show full loading screen for both auth and initial data load, but not during sign out
   const showFullLoadingScreen = isMainLoading || isDataLoading;
 

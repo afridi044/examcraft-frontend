@@ -4,6 +4,8 @@ import { useState, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { usePrefetchUserData } from "@/hooks/useDatabase";
+import { warmupConnection } from "@/lib/connection-warmup";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,7 @@ export const SignInForm = memo(function SignInForm() {
   const router = useRouter();
   // Lazy initialize auth hook to reduce initial load time
   const { signIn, loading } = useAuth();
+  const prefetchUserData = usePrefetchUserData();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   // Use lazy initial state for better performance
@@ -23,36 +26,65 @@ export const SignInForm = memo(function SignInForm() {
   }));
 
   // Memoize event handlers to prevent unnecessary re-renders
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (error) setError("");
-  }, [error]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+      if (error) setError("");
+    },
+    [error]
+  );
 
   const togglePasswordVisibility = useCallback(() => {
-    setShowPassword(prev => !prev);
+    setShowPassword((prev) => !prev);
   }, []);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
 
-    if (!formData.email || !formData.password) {
-      setError("Please fill in all fields");
-      return;
-    }
+      if (!formData.email || !formData.password) {
+        setError("Please fill in all fields");
+        return;
+      }
 
-    const { error } = await signIn(formData.email, formData.password);
+      // Warm up connection before sign in to reduce latency
+      warmupConnection().catch(() => {
+        // Ignore warmup errors - don't block sign in
+      });
 
-    if (error) {
-      setError(error);
-    } else {
-      router.push("/dashboard");
-    }
-  }, [formData.email, formData.password, signIn, router]);
+      const { error, data } = await signIn(formData.email, formData.password);
+
+      if (error) {
+        setError(error);
+      } else {
+        // Prefetch dashboard data immediately after successful authentication
+        // This will warm up the cache before we navigate to dashboard
+        if (data?.user) {
+          // Get the database user ID and prefetch data in parallel with navigation
+          const prefetchPromise = prefetchUserData();
+          router.push("/dashboard");
+          // Don't await prefetch to avoid blocking navigation
+          prefetchPromise.catch((err) => console.warn("Prefetch failed:", err));
+        } else {
+          router.push("/dashboard");
+        }
+
+        // OPTIMIZED: Prefetch user dashboard data after successful sign in
+        // This runs in parallel with navigation - doesn't block the redirect
+        if (data?.user_id) {
+          prefetchUserData(data.user_id).catch(() => {
+            // Prefetch failure shouldn't break sign in
+          });
+        }
+      }
+    },
+    [formData.email, formData.password, signIn, router, prefetchUserData]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-slate-900 flex items-center justify-center p-4">
@@ -66,13 +98,9 @@ export const SignInForm = memo(function SignInForm() {
             <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">
-              ExamCraft
-            </span>
+            <span className="text-2xl font-bold text-white">ExamCraft</span>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
-            Welcome back
-          </h1>
+          <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
           <p className="text-gray-400">
             Sign in to continue your learning journey
           </p>

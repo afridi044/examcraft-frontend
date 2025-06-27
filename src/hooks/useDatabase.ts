@@ -227,6 +227,11 @@ export function useQuizWithQuestions(quizId: string) {
     queryFn: () => db.quizzes.getQuizWithQuestions(quizId),
     select: (response) => response.data,
     enabled: !!quizId,
+    staleTime: 10 * 60 * 1000, // 10 minutes - quizzes don't change often during taking
+    refetchOnWindowFocus: false, // Don't refetch when user comes back from another tab
+    refetchOnMount: false, // Only refetch when data is stale
+    placeholderData: (previousData) => previousData, // Keep showing previous data while refetching
+    gcTime: 30 * 60 * 1000, // 30 minutes cache time
   });
 }
 
@@ -274,14 +279,14 @@ export function useDeleteQuiz() {
     onSuccess: (response, quizId) => {
       if (response.success) {
         // More targeted invalidation - only invalidate quiz lists, not all related data
-        queryClient.invalidateQueries({ 
+        queryClient.invalidateQueries({
           queryKey: ["quizzes"],
-          type: "all"
+          type: "all",
         });
         // Only invalidate quiz attempts if we have the specific quiz
-        queryClient.removeQueries({ 
+        queryClient.removeQueries({
           queryKey: ["quiz", quizId],
-          type: "all"
+          type: "all",
         });
       }
     },
@@ -380,7 +385,7 @@ export function useCreateFlashcard() {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.flashcardsDue(variables.user_id),
         });
-        
+
         // Also invalidate dashboard data for updated stats
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.dashboardStats(variables.user_id),
@@ -404,10 +409,10 @@ export function useUpdateFlashcard() {
     onSuccess: (response, { flashcardId, data }) => {
       if (response.success) {
         // Invalidate all flashcard-related queries for immediate updates
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            query.queryKey.includes("flashcards") && 
-            (query.queryKey.includes("user") || query.queryKey.includes("due"))
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey.includes("flashcards") &&
+            (query.queryKey.includes("user") || query.queryKey.includes("due")),
         });
       }
     },
@@ -423,17 +428,17 @@ export function useDeleteFlashcard() {
     onSuccess: (response) => {
       if (response.success) {
         // Immediately invalidate all flashcard-related queries for real-time updates
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            query.queryKey.includes("flashcards") && 
-            (query.queryKey.includes("user") || query.queryKey.includes("due"))
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey.includes("flashcards") &&
+            (query.queryKey.includes("user") || query.queryKey.includes("due")),
         });
-        
+
         // Also invalidate dashboard stats as flashcard count changed
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            query.queryKey.includes("dashboard") || 
-            query.queryKey.includes("analytics")
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey.includes("dashboard") ||
+            query.queryKey.includes("analytics"),
         });
       }
     },
@@ -485,7 +490,7 @@ export function useUserAnswers(
 // NEW: OPTIMIZED BATCH DASHBOARD HOOK - Use this for best performance
 export function useOptimizedDashboard(userId: string) {
   return useQuery({
-    queryKey: [...QUERY_KEYS.dashboardStats(userId), 'batch'],
+    queryKey: [...QUERY_KEYS.dashboardStats(userId), "batch"],
     queryFn: () => optimizedAnalyticsService.getAllDashboardData(userId),
     enabled: !!userId, // Only fetch when we have a userId
     staleTime: 2 * 60 * 1000, // 2 minutes - more reasonable for dashboard data
@@ -501,8 +506,14 @@ export function useOptimizedDashboard(userId: string) {
       recentActivity: data.recentActivity.data || [],
       topicProgress: data.topicProgress.data || [],
       isLoading: false,
-      isError: !data.stats.success || !data.recentActivity.success || !data.topicProgress.success,
-      error: data.stats.error || data.recentActivity.error || data.topicProgress.error,
+      isError:
+        !data.stats.success ||
+        !data.recentActivity.success ||
+        !data.topicProgress.success,
+      error:
+        data.stats.error ||
+        data.recentActivity.error ||
+        data.topicProgress.error,
     }),
   });
 }
@@ -560,10 +571,13 @@ export function useTopicProgress(userId: string) {
 // Compound Hooks (Multiple Operations)
 // =============================================
 
-export function useDashboardData(userId: string, useOptimized: boolean = false) {
+export function useDashboardData(
+  userId: string,
+  useOptimized: boolean = false
+) {
   // OPTIMIZED VERSION: Single batched call
   const optimizedResult = useOptimizedDashboard(userId);
-  
+
   // LEGACY VERSION: Individual hooks (for backward compatibility)
   const stats = useDashboardStats(userId);
   const recentActivity = useRecentActivity(userId);
@@ -601,23 +615,23 @@ export function useDashboardData(userId: string, useOptimized: boolean = false) 
     // Use optimized version if requested
     if (useOptimized) {
       return {
-        stats: { 
-          data: optimizedResult.data?.stats, 
-          isLoading: optimizedResult.isLoading, 
-          isError: optimizedResult.isError, 
-          error: optimizedResult.error 
+        stats: {
+          data: optimizedResult.data?.stats,
+          isLoading: optimizedResult.isLoading,
+          isError: optimizedResult.isError,
+          error: optimizedResult.error,
         },
-        recentActivity: { 
-          data: optimizedResult.data?.recentActivity || [], 
-          isLoading: optimizedResult.isLoading, 
-          isError: optimizedResult.isError, 
-          error: optimizedResult.error 
+        recentActivity: {
+          data: optimizedResult.data?.recentActivity || [],
+          isLoading: optimizedResult.isLoading,
+          isError: optimizedResult.isError,
+          error: optimizedResult.error,
         },
-        topicProgress: { 
-          data: optimizedResult.data?.topicProgress || [], 
-          isLoading: optimizedResult.isLoading, 
-          isError: optimizedResult.isError, 
-          error: optimizedResult.error 
+        topicProgress: {
+          data: optimizedResult.data?.topicProgress || [],
+          isLoading: optimizedResult.isLoading,
+          isError: optimizedResult.isError,
+          error: optimizedResult.error,
         },
         isLoading: optimizedResult.isLoading,
         isError: optimizedResult.isError,
@@ -635,7 +649,15 @@ export function useDashboardData(userId: string, useOptimized: boolean = false) 
       isError: stats.isError || recentActivity.isError || topicProgress.isError,
       error: stats.error || recentActivity.error || topicProgress.error,
     };
-  }, [userId, useOptimized, optimizedResult, stats, recentActivity, topicProgress, emptyState]);
+  }, [
+    userId,
+    useOptimized,
+    optimizedResult,
+    stats,
+    recentActivity,
+    topicProgress,
+    emptyState,
+  ]);
 }
 
 export function useUserContent(userId: string) {
@@ -660,25 +682,28 @@ export function useUserContent(userId: string) {
 export function useInvalidateUserData() {
   const queryClient = useQueryClient();
 
-  return useCallback((userId: string) => {
-    // Only invalidate essential dashboard data, not everything
-    queryClient.invalidateQueries({
-      queryKey: QUERY_KEYS.dashboardStats(userId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: QUERY_KEYS.recentActivity(userId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: QUERY_KEYS.topicProgress(userId),
-    });
-    // FIXED: Also invalidate flashcard data for real-time updates
-    queryClient.invalidateQueries({
-      queryKey: QUERY_KEYS.userFlashcards(userId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: QUERY_KEYS.flashcardsDue(userId),
-    });
-  }, [queryClient]);
+  return useCallback(
+    (userId: string) => {
+      // Only invalidate essential dashboard data, not everything
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.dashboardStats(userId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.recentActivity(userId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.topicProgress(userId),
+      });
+      // FIXED: Also invalidate flashcard data for real-time updates
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.userFlashcards(userId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.flashcardsDue(userId),
+      });
+    },
+    [queryClient]
+  );
 }
 
 // More targeted invalidation for specific operations
@@ -709,64 +734,182 @@ export function usePrefetchUserData() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    (userId: string, useOptimized: boolean = false) => {
-      // Only prefetch if data is not already cached and fresh
-      const prefetchIfStale = (queryKey: readonly unknown[], queryFn: () => Promise<any>, staleTime: number) => {
-        const query = queryClient.getQueryData(queryKey);
-        const queryState = queryClient.getQueryState(queryKey);
-        
-        // Only prefetch if data doesn't exist or is stale
-        if (!query || !queryState || Date.now() - (queryState.dataUpdatedAt || 0) > staleTime) {
-          queryClient.prefetchQuery({
-            queryKey,
-            queryFn,
-            staleTime,
-          });
-        }
-      };
+    async (userId: string) => {
+      if (!userId) return;
 
-      if (useOptimized) {
-        // OPTIMIZED: Prefetch all dashboard data in one batch call
-        prefetchIfStale(
-          [...QUERY_KEYS.dashboardStats(userId), 'batch'],
-          () => optimizedAnalyticsService.getAllDashboardData(userId),
-          2 * 60 * 1000 // 2 minutes
-        );
-      } else {
-        // LEGACY: Prefetch individual dashboard data
-        prefetchIfStale(
-          QUERY_KEYS.dashboardStats(userId),
-          () => db.analytics.getDashboardStats(userId),
-          2 * 60 * 1000 // 2 minutes
-        );
+      // All existing prefetch promises...
+      const prefetchPromises = [
+        // Dashboard data
+        queryClient.prefetchQuery({
+          queryKey: QUERY_KEYS.dashboardStats(userId),
+          queryFn: () => db.analytics.getDashboardStats(userId),
+          staleTime: 2 * 60 * 1000,
+        }),
+        queryClient.prefetchQuery({
+          queryKey: QUERY_KEYS.recentActivity(userId),
+          queryFn: () => db.analytics.getRecentActivity(userId, 10),
+          staleTime: 1 * 60 * 1000,
+        }),
+        queryClient.prefetchQuery({
+          queryKey: QUERY_KEYS.topicProgress(userId),
+          queryFn: () => db.analytics.getTopicProgress(userId),
+          staleTime: 5 * 60 * 1000,
+        }),
 
-        prefetchIfStale(
-          QUERY_KEYS.recentActivity(userId),
-          () => db.analytics.getRecentActivity(userId, 10),
-          2 * 60 * 1000 // 2 minutes
-        );
+        // Create pages data
+        queryClient.prefetchQuery({
+          queryKey: QUERY_KEYS.topics(),
+          queryFn: () => db.topics.getTopics(),
+          staleTime: 10 * 60 * 1000,
+        }),
+        queryClient.prefetchQuery({
+          queryKey: QUERY_KEYS.userFlashcards(userId),
+          queryFn: () => db.flashcards.getUserFlashcards(userId),
+          staleTime: 1 * 60 * 1000,
+        }),
 
-        prefetchIfStale(
-          QUERY_KEYS.topicProgress(userId),
-          () => db.analytics.getTopicProgress(userId),
-          5 * 60 * 1000 // 5 minutes
-        );
-      }
+        // Quiz history data
+        queryClient.prefetchQuery({
+          queryKey: ["user-quiz-attempts", userId],
+          queryFn: () => db.quizzes.getUserQuizAttempts(userId),
+          staleTime: 2 * 60 * 1000,
+        }),
+      ];
 
-      // Also prefetch user quizzes for faster navigation
-      prefetchIfStale(
-        QUERY_KEYS.userQuizzes(userId),
-        () => db.quizzes.getUserQuizzes(userId),
-        5 * 60 * 1000 // 5 minutes
-      );
-
-      // Only prefetch topics if not already cached
-      prefetchIfStale(
-        QUERY_KEYS.topics,
-        () => db.topics.getAllTopics(),
-        15 * 60 * 1000 // 15 minutes
-      );
+      // Use Promise.allSettled to handle any individual failures gracefully
+      await Promise.allSettled(prefetchPromises);
     },
     [queryClient]
   );
+}
+
+// Add specific quiz prefetching functions
+export function usePrefetchQuizPages() {
+  const queryClient = useQueryClient();
+
+  const prefetchQuizTake = useCallback(
+    (quizId: string) => {
+      if (!quizId) return;
+
+      queryClient.prefetchQuery({
+        queryKey: QUERY_KEYS.quizWithQuestions(quizId),
+        queryFn: () => db.quizzes.getQuizWithQuestions(quizId),
+        staleTime: 10 * 60 * 1000,
+      });
+    },
+    [queryClient]
+  );
+
+  const prefetchQuizReview = useCallback(
+    (quizId: string, userId: string) => {
+      if (!quizId || !userId) return;
+
+      queryClient.prefetchQuery({
+        queryKey: ["quiz-review", quizId, userId],
+        queryFn: async () => {
+          const url = `/api/quiz/review/${quizId}?userId=${userId}`;
+          const response = await fetch(url);
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch review data: ${response.status}`);
+          }
+
+          return response.json();
+        },
+        staleTime: 5 * 60 * 1000,
+      });
+    },
+    [queryClient]
+  );
+
+  const prefetchQuizHistory = useCallback(
+    (userId: string) => {
+      if (!userId) return;
+
+      queryClient.prefetchQuery({
+        queryKey: ["user-quiz-attempts", userId],
+        queryFn: async () => {
+          const response = await fetch(`/api/quiz/user-attempts/${userId}`);
+          if (!response.ok) {
+            throw new Error("Failed to fetch quiz attempts");
+          }
+          return response.json();
+        },
+        staleTime: 5 * 60 * 1000,
+      });
+    },
+    [queryClient]
+  );
+
+  return { prefetchQuizTake, prefetchQuizReview, prefetchQuizHistory };
+}
+
+// Specific prefetch functions for different pages
+export function usePrefetchCreatePages() {
+  const queryClient = useQueryClient();
+
+  return useCallback(async () => {
+    try {
+      // Prefetch topics for create pages - this is the main data they need
+      await queryClient.prefetchQuery({
+        queryKey: QUERY_KEYS.topics(),
+        queryFn: () => db.topics.getTopics(),
+        staleTime: 15 * 60 * 1000,
+      });
+    } catch (error) {
+      console.warn("Create pages prefetch failed:", error);
+    }
+  }, [queryClient]);
+}
+
+// Quiz Attempts (for quiz history page)
+export function useUserQuizAttempts(userId: string) {
+  return useQuery({
+    queryKey: ["user-quiz-attempts", userId],
+    queryFn: async () => {
+      if (!userId) {
+        return [];
+      }
+
+      const response = await fetch(`/api/quiz/user-attempts/${userId}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch quiz attempts");
+      }
+
+      return response.json();
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // Increased to 5 minutes - quiz attempts don't change frequently
+    gcTime: 15 * 60 * 1000, // Increased cache time
+    refetchOnWindowFocus: false,
+    refetchOnMount: false, // Don't refetch on mount if we have cached data
+    retry: 1,
+    refetchInterval: false,
+    // Show cached data immediately while fetching fresh data
+    placeholderData: (previousData) => previousData,
+  });
+}
+
+// Add new hook for quiz review data with React Query optimization
+export function useQuizReview(quizId: string, userId: string) {
+  return useQuery({
+    queryKey: ["quiz-review", quizId, userId],
+    queryFn: async () => {
+      const url = `/api/quiz/review/${quizId}?userId=${userId}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch review data: ${response.status}`);
+      }
+
+      return response.json();
+    },
+    enabled: !!(quizId && userId),
+    staleTime: 5 * 60 * 1000, // 5 minutes - review data is relatively static
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData,
+    gcTime: 15 * 60 * 1000, // 15 minutes cache time
+  });
 }

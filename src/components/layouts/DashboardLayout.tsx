@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { usePrefetchCreatePages } from "@/hooks/useDatabase";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const prefetchCreatePages = usePrefetchCreatePages();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -52,6 +54,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     // Then sign out in the background
     await signOut();
   };
+
+  // Prefetch create pages data when hovering over create links
+  const handleCreateLinkHover = useCallback(
+    (href: string) => {
+      if (href.includes("/create")) {
+        // Prefetch topics data for create pages
+        prefetchCreatePages().catch((err) =>
+          console.warn("Create page prefetch failed:", err)
+        );
+      }
+    },
+    [prefetchCreatePages]
+  );
 
   const navigationItems = [
     { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
@@ -105,6 +120,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white"
                   : "text-gray-400 hover:text-white hover:bg-gray-800/50"
               }`}
+              onMouseEnter={() => handleCreateLinkHover(item.href)}
             >
               <div
                 className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-200 ${

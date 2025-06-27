@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -6,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
   useCurrentUser,
-  useDashboardData,
   useOptimizedDashboard,
+  usePrefetchQuizPages,
 } from "@/hooks/useDatabase";
 import {
   BookOpen,
@@ -21,13 +20,15 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import type { RecentActivity, TopicProgress } from "@/types/database";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { prefetchQuizHistory } = usePrefetchQuizPages();
 
   // State for view all functionality
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -35,35 +36,36 @@ export default function DashboardPage() {
 
   // Get current user profile data for proper database user ID
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  
+
   // Use the database user_id
   const userId = currentUser?.user_id || "";
 
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
-  // Only invalidate data if it's stale or on explicit user action
-  // Removed automatic invalidation on mount for better performance
-
   // OPTIMIZED: Use the new batched dashboard hook for best performance with improved settings
   const dashboardData = useOptimizedDashboard(userId);
-  
+
   // Extract data from the optimized hook
   const stats = dashboardData.data?.stats;
   const recentActivity = dashboardData.data?.recentActivity || [];
   const topicProgress = dashboardData.data?.topicProgress || [];
 
-  // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
-  const isDataLoading = userId && dashboardData.isLoading;
-  
-  // Show full loading screen for both auth and initial data load, but not during sign out
-  const showFullLoadingScreen = isMainLoading || isDataLoading;
-  
+  // IMPROVED: More efficient loading logic - show cached data immediately if available
+  const isAuthLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
+  const isDataLoading =
+    userId && dashboardData.isLoading && !dashboardData.data; // Only show loading if no cached data
+
+  // Show loading screen only when absolutely necessary
+  const showLoadingScreen = isAuthLoading || isDataLoading;
+
   // For safer data access with defaults
   const safeStats = stats || {
     totalQuizzes: 0,
@@ -71,18 +73,22 @@ export default function DashboardPage() {
     totalFlashcards: 0,
     averageScore: 0,
     studyStreak: 0,
-    questionsAnswered: 0
+    questionsAnswered: 0,
   };
   const safeRecentActivity = recentActivity || [];
   const safeTopicProgress = topicProgress || [];
 
-  const StatValue = ({ value, suffix = "" }: { 
-    value: number; 
-    suffix?: string; 
+  const StatValue = ({
+    value,
+    suffix = "",
+  }: {
+    value: number;
+    suffix?: string;
   }) => {
     return (
       <p className="text-xl sm:text-2xl font-bold text-white">
-        {value.toLocaleString()}{suffix}
+        {value.toLocaleString()}
+        {suffix}
       </p>
     );
   };
@@ -108,8 +114,16 @@ export default function DashboardPage() {
     }
   };
 
+  // Prefetch quiz history data when hovering over the link
+  const handleQuizHistoryHover = useCallback(() => {
+    if (currentUser?.user_id) {
+      // Prefetch quiz history data for faster navigation
+      prefetchQuizHistory(currentUser.user_id);
+    }
+  }, [prefetchQuizHistory, currentUser?.user_id]);
+
   // Single loading screen for all loading states
-  if (showFullLoadingScreen) {
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -123,9 +137,7 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Dashboard...
             </h2>
-            <p className="text-gray-400">
-              Preparing your learning experience
-            </p>
+            <p className="text-gray-400">Preparing your learning experience</p>
           </div>
         </div>
       </DashboardLayout>
@@ -141,7 +153,7 @@ export default function DashboardPage() {
             Welcome back!
           </h1>
           <p className="text-gray-400 text-sm sm:text-base">
-            Here's your learning progress overview
+            Here&apos;s your learning progress overview
           </p>
         </div>
 
@@ -153,6 +165,7 @@ export default function DashboardPage() {
               href="/dashboard/quiz-history"
               className="absolute inset-0 rounded-xl"
               aria-label="View Quiz History"
+              onMouseEnter={handleQuizHistoryHover}
             />
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 sm:space-x-4">
@@ -163,14 +176,14 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Quizzes
                   </p>
-                  <StatValue 
-                    value={safeStats.totalQuizzes}
-                  />
+                  <StatValue value={safeStats.totalQuizzes} />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium hidden sm:inline">+12%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">
+                  +12%
+                </span>
               </div>
             </div>
           </div>
@@ -186,14 +199,14 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Exams
                   </p>
-                  <StatValue 
-                    value={safeStats.totalExams}
-                  />
+                  <StatValue value={safeStats.totalExams} />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium hidden sm:inline">+8%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">
+                  +8%
+                </span>
               </div>
             </div>
           </div>
@@ -214,14 +227,14 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Flashcards
                   </p>
-                  <StatValue 
-                    value={safeStats.totalFlashcards}
-                  />
+                  <StatValue value={safeStats.totalFlashcards} />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium hidden sm:inline">+15%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">
+                  +15%
+                </span>
               </div>
             </div>
           </div>
@@ -237,15 +250,14 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Overall Score
                   </p>
-                  <StatValue 
-                    value={safeStats.averageScore}
-                    suffix="%"
-                  />
+                  <StatValue value={safeStats.averageScore} suffix="%" />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium hidden sm:inline">+5%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">
+                  +5%
+                </span>
               </div>
             </div>
           </div>
@@ -261,10 +273,7 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Study Streak
                   </p>
-                  <StatValue 
-                    value={safeStats.studyStreak}
-                    suffix=" days"
-                  />
+                  <StatValue value={safeStats.studyStreak} suffix=" days" />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
@@ -287,14 +296,14 @@ export default function DashboardPage() {
                   <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Questions Answered
                   </p>
-                  <StatValue 
-                    value={safeStats.questionsAnswered}
-                  />
+                  <StatValue value={safeStats.questionsAnswered} />
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium hidden sm:inline">+20%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">
+                  +20%
+                </span>
               </div>
             </div>
           </div>
@@ -341,7 +350,7 @@ export default function DashboardPage() {
                 {(showAllActivity
                   ? safeRecentActivity
                   : safeRecentActivity.slice(0, 3)
-                ).map((activity: any) => (
+                ).map((activity: RecentActivity) => (
                   <div
                     key={activity.id}
                     className="group flex items-center justify-between p-2 sm:p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
@@ -358,7 +367,10 @@ export default function DashboardPage() {
                         </p>
                         <p className="text-xs text-gray-400">
                           <span className="capitalize">{activity.type}</span>
-                          <span className="hidden sm:inline"> • {formatDate(activity.completed_at)}</span>
+                          <span className="hidden sm:inline">
+                            {" "}
+                            • {formatDate(activity.completed_at)}
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -396,7 +408,9 @@ export default function DashboardPage() {
                 <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
                   <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-white">Topic Progress</h2>
+                <h2 className="text-base sm:text-lg font-bold text-white">
+                  Topic Progress
+                </h2>
               </div>
               {safeTopicProgress.length > 3 && (
                 <Button
@@ -427,7 +441,7 @@ export default function DashboardPage() {
                 {(showAllProgress
                   ? safeTopicProgress
                   : safeTopicProgress.slice(0, 3)
-                ).map((topic: any) => (
+                ).map((topic: TopicProgress) => (
                   <div
                     key={topic.topic_id}
                     className="group flex items-center justify-between p-2 sm:p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"

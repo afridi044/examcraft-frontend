@@ -41,7 +41,7 @@ export default function CreateFlashcardPage() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const { data: topics } = useTopics();
+  const { data: topics, isLoading: topicsLoading } = useTopics();
   const invalidateUserData = useInvalidateUserData();
 
   // State management
@@ -68,12 +68,12 @@ export default function CreateFlashcardPage() {
   const [numFlashcardsInput, setNumFlashcardsInput] = useState("10");
 
   // Optimized form handlers with useCallback
-  const handleInputChange = useCallback((
-    field: keyof FlashcardGenerationForm,
-    value: string | number
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }, []);
+  const handleInputChange = useCallback(
+    (field: keyof FlashcardGenerationForm, value: string | number) => {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
   const validateForm = useCallback(() => {
     const topicName = form.topic_id
@@ -157,7 +157,7 @@ export default function CreateFlashcardPage() {
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
@@ -176,13 +176,17 @@ export default function CreateFlashcardPage() {
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
 
-  // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
-  
-  // Show full loading screen for both auth and initial data load, but not during sign out
-  const showFullLoadingScreen = isMainLoading;
-  
-  if (showFullLoadingScreen) {
+  // IMPROVED: More efficient loading logic - show cached data immediately if available
+  const isAuthLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
+  const isDataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
+
+  // Show loading screen only when absolutely necessary
+  const showLoadingScreen = isAuthLoading || isDataLoading;
+
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -196,9 +200,7 @@ export default function CreateFlashcardPage() {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Flashcard Creator...
             </h2>
-            <p className="text-gray-400">
-              Preparing your learning tools
-            </p>
+            <p className="text-gray-400">Preparing your learning tools</p>
           </div>
         </div>
       </DashboardLayout>
@@ -215,9 +217,9 @@ export default function CreateFlashcardPage() {
 
   // Show success screen if flashcards were generated
   if (generatedFlashcards) {
-  return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto p-4 sm:p-8 lg:p-20 space-y-6 sm:space-y-8">
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto p-4 sm:p-8 lg:p-20 space-y-6 sm:space-y-8">
           <div className="text-center space-y-6 sm:space-y-8">
             {/* Success Header */}
             <div className="space-y-4">
@@ -278,7 +280,8 @@ export default function CreateFlashcardPage() {
                       className="border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[44px]"
                     >
                       <Users className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Return to</span> Dashboard
+                      <span className="hidden sm:inline">Return to</span>{" "}
+                      Dashboard
                     </Button>
 
                     <Button
@@ -299,7 +302,8 @@ export default function CreateFlashcardPage() {
                       className="border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[44px]"
                     >
                       <Layers className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Create</span> More<span className="hidden sm:inline"> Flashcards</span>
+                      <span className="hidden sm:inline">Create</span> More
+                      <span className="hidden sm:inline"> Flashcards</span>
                     </Button>
                   </div>
                 </div>
@@ -578,7 +582,9 @@ export default function CreateFlashcardPage() {
                 <Lightbulb className="h-4 w-4 text-white" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-base sm:text-lg font-bold text-teal-300">Pro Tips</h3>
+                <h3 className="text-base sm:text-lg font-bold text-teal-300">
+                  Pro Tips
+                </h3>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>
                     • Provide detailed content for more accurate flashcards

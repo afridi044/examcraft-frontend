@@ -21,7 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
-import { useCurrentUser } from "@/hooks/useDatabase";
+import {
+  useCurrentUser,
+  useQuizReview,
+  usePrefetchQuizPages,
+} from "@/hooks/useDatabase";
 import toast from "react-hot-toast";
 
 interface ReviewData {
@@ -67,48 +71,29 @@ export default function QuizReviewPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [flashcardStates, setFlashcardStates] = useState<
     Record<string, "idle" | "creating" | "created" | "exists">
   >({});
+  const { prefetchQuizTake } = usePrefetchQuizPages();
 
   const quizId = params.quizId as string;
+
+  // OPTIMIZED: Use React Query hook instead of manual fetch
+  const {
+    data: reviewData,
+    isLoading: loading,
+    error: reviewError,
+  } = useQuizReview(quizId, currentUser?.user_id || "");
+
+  // Convert query error to string for consistency
+  const error = reviewError?.message || null;
 
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [authLoading, user, router]);
-
-  useEffect(() => {
-    if (currentUser && quizId) {
-      fetchReviewData();
-    }
-  }, [currentUser, quizId]);
-
-  // OPTIMIZED: Cleaner data fetching with useCallback
-  const fetchReviewData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const url = `/api/quiz/review/${quizId}?userId=${currentUser?.user_id}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch review data: ${response.status}`);
-      }
-
-      const data: ReviewData = await response.json();
-      setReviewData(data);
-    } catch {
-      setError("Failed to load quiz review");
-      toast.error("Failed to load quiz review");
-    } finally {
-      setLoading(false);
-    }
-  }, [quizId, currentUser?.user_id]);
 
   // OPTIMIZED: Memoized utility functions
   const formatTime = useCallback((seconds: number) => {
@@ -193,9 +178,12 @@ export default function QuizReviewPage() {
   };
 
   // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = authLoading || (authLoading === false && user && userLoading) || (authLoading === false && user && !currentUser);
+  const isMainLoading =
+    authLoading ||
+    (authLoading === false && user && userLoading) ||
+    (authLoading === false && user && !currentUser);
   const isDataLoading = loading;
-  
+
   // Show full loading screen for both auth and initial data load, but not during sign out
   const showFullLoadingScreen = isMainLoading || isDataLoading;
 
@@ -213,9 +201,7 @@ export default function QuizReviewPage() {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Quiz Review...
             </h2>
-            <p className="text-gray-400">
-              Preparing your quiz analysis
-            </p>
+            <p className="text-gray-400">Preparing your quiz analysis</p>
           </div>
         </div>
       </DashboardLayout>
@@ -277,6 +263,7 @@ export default function QuizReviewPage() {
           <div className="flex space-x-3">
             <Button
               onClick={() => router.push(`/quiz/take/${quizId}`)}
+              onMouseEnter={() => prefetchQuizTake(quizId)}
               className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium px-4 sm:px-6 py-2 shadow-lg hover:shadow-purple-500/25 transition-all duration-200 text-sm sm:text-base min-h-[44px]"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
@@ -327,7 +314,9 @@ export default function QuizReviewPage() {
         <div className="space-y-4 sm:space-y-6">
           <div className="flex items-center space-x-3">
             <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
-            <h2 className="text-lg sm:text-xl font-bold text-white">Question Review</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-white">
+              Question Review
+            </h2>
           </div>
 
           {reviewData.questions.map((question, index) => {

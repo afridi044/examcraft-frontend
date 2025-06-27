@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Trash2,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,9 @@ import {
   useCurrentUser,
   useDeleteQuiz,
   useInvalidateUserData,
+  useUserQuizAttempts,
+  usePrefetchCreatePages,
+  usePrefetchQuizPages,
 } from "@/hooks/useDatabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "react-hot-toast";
@@ -60,9 +64,11 @@ export default function QuizHistoryPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const deleteQuizMutation = useDeleteQuiz();
   const invalidateUserData = useInvalidateUserData();
+  const prefetchCreatePages = usePrefetchCreatePages();
   const queryClient = useQueryClient();
   const router = useRouter();
-  
+  const { prefetchQuizTake, prefetchQuizReview } = usePrefetchQuizPages();
+
   // UI state
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "score" | "title">("date");
@@ -79,47 +85,36 @@ export default function QuizHistoryPage() {
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
 
-  // OPTIMIZED: More conservative data fetching - only when we have a userId
-  const { data: quizAttempts, isLoading: loadingAttempts } = useQuery({
-    queryKey: ["quiz-attempts", userId],
-    queryFn: async () => {
-      if (!userId) {
-        return [];
-      }
+  // OPTIMIZED: Use the new optimized hook instead of direct fetch
+  const {
+    data: quizAttempts,
+    isLoading: loadingAttempts,
+    error,
+  } = useUserQuizAttempts(userId);
 
-      const response = await fetch(`/api/quiz/user-attempts/${userId}`);
+  // IMPROVED: More efficient loading logic - show cached data immediately if available
+  const isAuthLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch quiz attempts");
-      }
+  // Only show loading if we have no data at all and we're actually loading
+  const isDataLoading = userId && loadingAttempts && !quizAttempts;
 
-      return response.json();
-    },
-    enabled: !!userId, // Only fetch when we have a userId
-    staleTime: 5 * 60 * 1000, // 5 minutes - more reasonable for quiz history
-    refetchOnWindowFocus: false, // Disabled for better performance
-    refetchOnMount: "always", // Only refetch when explicitly needed
-    gcTime: 10 * 60 * 1000, // 10 minutes cache time
-  });
+  // Show loading screen only when absolutely necessary
+  const showLoadingScreen = isAuthLoading || isDataLoading;
 
-  // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
-  const isDataLoading = userId && loadingAttempts;
-  
-  // Show full loading screen for both auth and initial data load, but not during sign out
-  const showFullLoadingScreen = isMainLoading || isDataLoading;
-
-  // For safer data access with defaults
+  // For safer data access with defaults - show cached data immediately
   const safeQuizAttempts = quizAttempts || [];
 
-  // OPTIMIZED: Simplified statistics and filtering with early returns
+  // OPTIMIZED: Memoize the expensive calculations with better dependency array
   const { stats, filteredAttempts } = useMemo(() => {
     if (!safeQuizAttempts?.length) {
       return {
@@ -144,9 +139,19 @@ export default function QuizHistoryPage() {
     let totalTime = 0;
     let passedQuizzes = 0;
 
-    for (const attempt of safeQuizAttempts) {
+    // Pre-filter for search to avoid repeated calculations
+    const searchLower = searchTerm.toLowerCase();
+    const searchFiltered = searchTerm
+      ? safeQuizAttempts.filter(
+          (attempt: QuizAttempt) =>
+            attempt.title.toLowerCase().includes(searchLower) ||
+            attempt.topic_name?.toLowerCase().includes(searchLower)
+        )
+      : safeQuizAttempts;
+
+    for (const attempt of searchFiltered) {
       totalQuizzes++;
-      
+
       if (attempt.status === "completed") {
         completedQuizzes++;
         totalScore += attempt.score_percentage;
@@ -162,32 +167,38 @@ export default function QuizHistoryPage() {
       totalQuizzes,
       completedQuizzes,
       incompleteQuizzes,
-      passedQuizzes, // Keep this for display
-      averageScore: (completedQuizzes + incompleteQuizzes) > 0 
-        ? totalScore / (completedQuizzes + incompleteQuizzes) 
-        : 0,
-      averageTime: completedQuizzes > 0 ? totalTime / completedQuizzes : 0,
-      passRate: completedQuizzes > 0 ? (passedQuizzes / completedQuizzes) * 100 : 0,
+      passedQuizzes,
+      averageScore:
+        completedQuizzes + incompleteQuizzes > 0
+          ? Math.round(totalScore / (completedQuizzes + incompleteQuizzes))
+          : 0,
+      averageTime:
+        completedQuizzes > 0 ? Math.round(totalTime / completedQuizzes) : 0,
+      passRate:
+        completedQuizzes > 0
+          ? Math.round((passedQuizzes / completedQuizzes) * 100)
+          : 0,
     };
 
     // Simplified filtering and sorting
-    const searchLower = searchTerm.toLowerCase();
-    const filteredAttempts = safeQuizAttempts
+    const filteredAttempts = searchFiltered
       .filter((attempt: QuizAttempt) => {
-        // Search filter
-        if (searchTerm && !(
-          attempt.title.toLowerCase().includes(searchLower) ||
-          attempt.topic_name?.toLowerCase().includes(searchLower)
-        )) {
-          return false;
-        }
-
         // Status filter
         if (filterBy === "all") return true;
         if (filterBy === attempt.status) return true;
-        if (filterBy === "passed" && attempt.status === "completed" && attempt.score_percentage >= 70) return true;
-        if (filterBy === "failed" && attempt.status === "completed" && attempt.score_percentage < 70) return true;
-        
+        if (
+          filterBy === "passed" &&
+          attempt.status === "completed" &&
+          attempt.score_percentage >= 70
+        )
+          return true;
+        if (
+          filterBy === "failed" &&
+          attempt.status === "completed" &&
+          attempt.score_percentage < 70
+        )
+          return true;
+
         return false;
       })
       .sort((a: QuizAttempt, b: QuizAttempt) => {
@@ -195,8 +206,9 @@ export default function QuizHistoryPage() {
 
         switch (sortBy) {
           case "date":
-            comparison = new Date(a.completed_at || a.created_at).getTime() - 
-                        new Date(b.completed_at || b.created_at).getTime();
+            comparison =
+              new Date(a.completed_at || a.created_at).getTime() -
+              new Date(b.completed_at || b.created_at).getTime();
             break;
           case "score":
             comparison = a.score_percentage - b.score_percentage;
@@ -210,30 +222,34 @@ export default function QuizHistoryPage() {
       });
 
     return { stats, filteredAttempts };
-  }, [safeQuizAttempts, searchTerm, filterBy, sortBy, sortOrder]);
+  }, [safeQuizAttempts, searchTerm, filterBy, sortBy, sortOrder]); // Optimized dependencies
 
   // OPTIMIZED: Combined color utility functions with memoization
   const getScoreColors = useMemo(() => {
     return (score: number) => {
-      if (score >= 90) return {
-        text: "text-emerald-400",
-        badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-      };
-      if (score >= 80) return {
-        text: "text-green-400", 
-        badge: "bg-green-500/20 text-green-400 border-green-500/30"
-      };
-      if (score >= 70) return {
-        text: "text-yellow-400",
-        badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-      };
-      if (score >= 60) return {
-        text: "text-orange-400",
-        badge: "bg-orange-500/20 text-orange-400 border-orange-500/30"
-      };
+      if (score >= 90)
+        return {
+          text: "text-emerald-400",
+          badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+        };
+      if (score >= 80)
+        return {
+          text: "text-green-400",
+          badge: "bg-green-500/20 text-green-400 border-green-500/30",
+        };
+      if (score >= 70)
+        return {
+          text: "text-yellow-400",
+          badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+        };
+      if (score >= 60)
+        return {
+          text: "text-orange-400",
+          badge: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+        };
       return {
         text: "text-red-400",
-        badge: "bg-red-500/20 text-red-400 border-red-500/30"
+        badge: "bg-red-500/20 text-red-400 border-red-500/30",
       };
     };
   }, []);
@@ -285,185 +301,240 @@ export default function QuizHistoryPage() {
     };
   }, []);
 
-  const handleDeleteQuiz = useCallback(async (quizId: string, title: string) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${title}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    setDeletingQuizId(quizId);
-    try {
-      const result = await deleteQuizMutation.mutateAsync(quizId);
-      if (result.success) {
-        toast.success("Quiz deleted successfully!");
-        
-        // Optimistically update the cache by removing the deleted quiz immediately
-        queryClient.setQueryData(["quiz-attempts", userId], (oldData: QuizAttempt[] | undefined) => {
-          if (!oldData) return [];
-          return oldData.filter(attempt => attempt.quiz_id !== quizId);
-        });
-        
-        // Also invalidate the query to ensure consistency with server
-        await queryClient.invalidateQueries({
-          queryKey: ["quiz-attempts", userId]
-        });
-        
-        // Also invalidate general user data for dashboard consistency
-        if (userId) {
-          invalidateUserData(userId);
-        }
-      } else {
-        toast.error("Failed to delete quiz");
+  const handleDeleteQuiz = useCallback(
+    async (quizId: string, title: string) => {
+      if (
+        !window.confirm(
+          `Are you sure you want to delete "${title}"? This action cannot be undone.`
+        )
+      ) {
+        return;
       }
-    } catch (error) {
-      console.error("Delete quiz error:", error);
-      toast.error("Failed to delete quiz");
-      
-      // On error, invalidate to ensure cache is consistent with server state
-      await queryClient.invalidateQueries({
-        queryKey: ["quiz-attempts", userId]
-      });
-    } finally {
-      setDeletingQuizId(null);
-    }
-  }, [deleteQuizMutation, userId, invalidateUserData, queryClient]);
 
-  const getActionButton = useCallback((attempt: QuizAttempt) => {
-    const isDeleting = deletingQuizId === attempt.quiz_id;
+      setDeletingQuizId(quizId);
+      try {
+        const result = await deleteQuizMutation.mutateAsync(quizId);
+        if (result.success) {
+          toast.success("Quiz deleted successfully!");
 
-    switch (attempt.status) {
-      case "completed":
-        return (
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Link href={`/quiz/review/${attempt.quiz_id}`} className="w-full sm:w-auto">
+          // Optimistically update the cache by removing the deleted quiz immediately
+          queryClient.setQueryData(
+            ["quiz-attempts", userId],
+            (oldData: QuizAttempt[] | undefined) => {
+              if (!oldData) return [];
+              return oldData.filter((attempt) => attempt.quiz_id !== quizId);
+            }
+          );
+
+          // Also invalidate the query to ensure consistency with server
+          await queryClient.invalidateQueries({
+            queryKey: ["quiz-attempts", userId],
+          });
+
+          // Also invalidate general user data for dashboard consistency
+          if (userId) {
+            invalidateUserData(userId);
+          }
+        } else {
+          toast.error("Failed to delete quiz");
+        }
+      } catch (error) {
+        console.error("Delete quiz error:", error);
+        toast.error("Failed to delete quiz");
+
+        // On error, invalidate to ensure cache is consistent with server state
+        await queryClient.invalidateQueries({
+          queryKey: ["quiz-attempts", userId],
+        });
+      } finally {
+        setDeletingQuizId(null);
+      }
+    },
+    [deleteQuizMutation, userId, invalidateUserData, queryClient]
+  );
+
+  const getActionButton = useCallback(
+    (attempt: QuizAttempt) => {
+      const isDeleting = deletingQuizId === attempt.quiz_id;
+
+      switch (attempt.status) {
+        case "completed":
+          return (
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+              <Link
+                href={`/quiz/review/${attempt.quiz_id}`}
+                className="w-full sm:w-auto"
+                onMouseEnter={() =>
+                  prefetchQuizReview(
+                    attempt.quiz_id,
+                    currentUser?.user_id || ""
+                  )
+                }
+              >
+                <Button
+                  size="sm"
+                  className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
+                >
+                  <BookOpen className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Review</span>
+                  <span className="sm:hidden">Review</span>
+                </Button>
+              </Link>
+              <Link
+                href={`/quiz/take/${attempt.quiz_id}`}
+                className="w-full sm:w-auto"
+                onMouseEnter={() => prefetchQuizTake(attempt.quiz_id)}
+              >
+                <Button
+                  size="sm"
+                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border-green-500/30 w-full sm:w-auto"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Retake</span>
+                  <span className="sm:hidden">Retake</span>
+                </Button>
+              </Link>
               <Button
                 size="sm"
-                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
+                onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+                disabled={isDeleting}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
               >
-                <BookOpen className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">Review</span>
-                <span className="sm:hidden">Review</span>
+                {isDeleting ? (
+                  <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                <span className="hidden sm:inline">
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </span>
+                <span className="sm:hidden">
+                  {isDeleting ? "..." : "Delete"}
+                </span>
               </Button>
-            </Link>
-            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
+            </div>
+          );
+        case "incomplete":
+          return (
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+              <Link
+                href={`/quiz/take/${attempt.quiz_id}`}
+                className="w-full sm:w-auto"
+                onMouseEnter={() => prefetchQuizTake(attempt.quiz_id)}
+              >
+                <Button
+                  size="sm"
+                  className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30 w-full sm:w-auto"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Continue Quiz</span>
+                  <span className="sm:hidden">Continue</span>
+                </Button>
+              </Link>
               <Button
                 size="sm"
-                className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border-green-500/30 w-full sm:w-auto"
+                onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+                disabled={isDeleting}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
               >
-                <Play className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">Retake</span>
-                <span className="sm:hidden">Retake</span>
+                {isDeleting ? (
+                  <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                <span className="hidden sm:inline">
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </span>
+                <span className="sm:hidden">
+                  {isDeleting ? "..." : "Delete"}
+                </span>
               </Button>
-            </Link>
-            <Button
-              size="sm"
-              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
-              disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
-            >
-              {isDeleting ? (
-                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
-              ) : (
-                <Trash2 className="h-3 w-3 mr-1" />
-              )}
-              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
-              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
-            </Button>
-          </div>
-        );
-      case "incomplete":
-        return (
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
+            </div>
+          );
+        case "not_attempted":
+          return (
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+              <Link
+                href={`/quiz/take/${attempt.quiz_id}`}
+                className="w-full sm:w-auto"
+                onMouseEnter={() => prefetchQuizTake(attempt.quiz_id)}
+              >
+                <Button
+                  size="sm"
+                  className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Start Quiz</span>
+                  <span className="sm:hidden">Start</span>
+                </Button>
+              </Link>
               <Button
                 size="sm"
-                className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30 w-full sm:w-auto"
+                onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+                disabled={isDeleting}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
               >
-                <Play className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">Continue Quiz</span>
-                <span className="sm:hidden">Continue</span>
+                {isDeleting ? (
+                  <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                <span className="hidden sm:inline">
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </span>
+                <span className="sm:hidden">
+                  {isDeleting ? "..." : "Delete"}
+                </span>
               </Button>
-            </Link>
-            <Button
-              size="sm"
-              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
-              disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
-            >
-              {isDeleting ? (
-                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
-              ) : (
-                <Trash2 className="h-3 w-3 mr-1" />
-              )}
-              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
-              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
-            </Button>
-          </div>
-        );
-      case "not_attempted":
-        return (
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
+            </div>
+          );
+        case "empty":
+          return (
+            <div className="flex space-x-2">
               <Button
                 size="sm"
-                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
+                disabled
+                className="bg-gray-500/20 text-gray-400 border-gray-500/30 cursor-not-allowed"
               >
-                <Play className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">Start Quiz</span>
-                <span className="sm:hidden">Start</span>
+                No Questions
               </Button>
-            </Link>
-            <Button
-              size="sm"
-              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
-              disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
-            >
-              {isDeleting ? (
-                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
-              ) : (
-                <Trash2 className="h-3 w-3 mr-1" />
-              )}
-              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
-              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
-            </Button>
-          </div>
-        );
-      case "empty":
-        return (
-          <div className="flex space-x-2">
-            <Button
-              size="sm"
-              disabled
-              className="bg-gray-500/20 text-gray-400 border-gray-500/30 cursor-not-allowed"
-            >
-              No Questions
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
-              disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
-            >
-              {isDeleting ? (
-                <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
-              ) : (
-                <Trash2 className="h-3 w-3 mr-1" />
-              )}
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        );
-      default:
-        return null;
-    }
-  }, [deletingQuizId, handleDeleteQuiz]);
+              <Button
+                size="sm"
+                onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
+                disabled={isDeleting}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                {isDeleting ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          );
+        default:
+          return null;
+      }
+    },
+    [
+      deletingQuizId,
+      handleDeleteQuiz,
+      currentUser?.user_id,
+      prefetchQuizReview,
+      prefetchQuizTake,
+    ]
+  );
+
+  // Prefetch create quiz data when hovering over create link
+  const handleCreateQuizHover = useCallback(() => {
+    prefetchCreatePages().catch((err) =>
+      console.warn("Create quiz prefetch failed:", err)
+    );
+  }, [prefetchCreatePages]);
 
   // Single loading screen for all loading states - matching dashboard pattern
-  if (showFullLoadingScreen) {
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -732,7 +803,10 @@ export default function QuizHistoryPage() {
                       : "You have created quizzes but haven't taken any yet. Start with your first quiz!"}
                 </p>
                 <div className="flex gap-3 justify-center">
-                  <Link href="/quiz/create">
+                  <Link
+                    href="/quiz/create"
+                    onMouseEnter={handleCreateQuizHover}
+                  >
                     <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
                       Create New Quiz
                     </Button>
@@ -765,7 +839,7 @@ export default function QuizHistoryPage() {
                             <h3 className="text-lg sm:text-xl font-semibold text-white truncate">
                               {attempt.title}
                             </h3>
-                            
+
                             {/* Status Badge */}
                             <span
                               className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(attempt.status)} w-fit`}

@@ -6,7 +6,11 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { useCurrentUser, useQuizWithQuestions } from "@/hooks/useDatabase";
+import {
+  useCurrentUser,
+  useQuizWithQuestions,
+  usePrefetchQuizPages,
+} from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -44,11 +48,12 @@ export default function TakeQuizPage() {
   const quizId = params.quizId as string;
   const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const { prefetchQuizReview } = usePrefetchQuizPages();
 
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
@@ -243,9 +248,12 @@ export default function TakeQuizPage() {
   };
 
   // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isMainLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
   const isDataLoading = isLoading;
-  
+
   // Show full loading screen for both auth and initial data load, but not during sign out
   const showFullLoadingScreen = isMainLoading || isDataLoading;
 
@@ -263,9 +271,7 @@ export default function TakeQuizPage() {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Quiz...
             </h2>
-            <p className="text-gray-400">
-              Preparing your quiz questions
-            </p>
+            <p className="text-gray-400">Preparing your quiz questions</p>
           </div>
         </div>
       </DashboardLayout>
@@ -308,7 +314,9 @@ export default function TakeQuizPage() {
           >
             <div className="flex items-center justify-center space-x-3">
               <Trophy className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500" />
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">Quiz Completed!</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">
+                Quiz Completed!
+              </h1>
             </div>
 
             <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8">
@@ -340,20 +348,25 @@ export default function TakeQuizPage() {
               </div>
 
               <div className="space-y-3 sm:space-y-4">
-                <Button
-                  onClick={() => router.push(`/quiz/review/${quizId}`)}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 min-h-[48px]"
-                >
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Review Quiz & Explanations
-                </Button>
-                <Button
-                  onClick={() => router.push("/dashboard")}
-                  variant="outline"
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[48px]"
-                >
-                  Return to Dashboard
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button
+                    onClick={() => router.push(`/quiz/review/${quizId}`)}
+                    onMouseEnter={() =>
+                      prefetchQuizReview(quizId, currentUser?.user_id || "")
+                    }
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-3 font-medium"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    View Detailed Review
+                  </Button>
+                  <Button
+                    onClick={() => router.push("/dashboard")}
+                    variant="outline"
+                    className="border-gray-600 text-gray-300 hover:bg-gray-700/50 px-6 py-3"
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
                 <Button
                   onClick={() => router.push("/quiz/create")}
                   variant="outline"
@@ -385,14 +398,20 @@ export default function TakeQuizPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{quiz.title}</h1>
-              <p className="text-gray-400 text-sm sm:text-base truncate">{quiz.description}</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-white truncate">
+                {quiz.title}
+              </h1>
+              <p className="text-gray-400 text-sm sm:text-base truncate">
+                {quiz.description}
+              </p>
             </div>
           </div>
           <div className="flex items-center justify-between sm:justify-end space-x-4">
             <div className="flex items-center space-x-2 text-gray-300">
               <Clock className="h-4 w-4" />
-              <span className="text-sm sm:text-base">{formatTime(timeElapsed)}</span>
+              <span className="text-sm sm:text-base">
+                {formatTime(timeElapsed)}
+              </span>
             </div>
             <div className="text-gray-300 text-sm sm:text-base">
               {currentQuestionIndex + 1} / {questions.length}
@@ -436,7 +455,9 @@ export default function TakeQuizPage() {
               <div className="space-y-3">
                 {currentQuestion?.question_type === "fill-in-blank" ? (
                   <div className="space-y-2">
-                    <label className="text-gray-300 text-sm sm:text-base">Your Answer:</label>
+                    <label className="text-gray-300 text-sm sm:text-base">
+                      Your Answer:
+                    </label>
                     <input
                       type="text"
                       value={
@@ -475,7 +496,9 @@ export default function TakeQuizPage() {
                               <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                             )}
                           </div>
-                          <span className="text-sm sm:text-base">{option.content}</span>
+                          <span className="text-sm sm:text-base">
+                            {option.content}
+                          </span>
                         </div>
                       </button>
                     );

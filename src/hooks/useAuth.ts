@@ -16,14 +16,18 @@ export function useAuth() {
     // Get initial session - only once, optimized for speed
     const initializeAuth = async () => {
       try {
+        // Use getSession instead of getUser for faster initial load
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession();
 
         // Handle refresh token errors
-        if (error && error.message.includes('refresh')) {
-          console.warn('Refresh token error, clearing session:', error);
+        if (
+          error &&
+          (error.message.includes("refresh") || error.message.includes("JWT"))
+        ) {
+          console.warn("Session error, clearing:", error.message);
           await supabase.auth.signOut();
           if (isMounted) {
             setUser(null);
@@ -59,30 +63,41 @@ export function useAuth() {
       initializeAuth();
     }
 
-    // Listen for auth changes - but keep it simple
+    // Listen for auth changes - optimized for performance
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (isMounted) {
-        // Handle TOKEN_REFRESH errors
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          console.warn('Token refresh failed, signing out');
-          await supabase.auth.signOut();
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+      if (!isMounted) return;
 
-        // Handle sign out
-        if (event === 'SIGNED_OUT') {
+      // Handle different auth events efficiently
+      switch (event) {
+        case "TOKEN_REFRESHED":
+          if (!session) {
+            console.warn("Token refresh failed, signing out");
+            await supabase.auth.signOut();
+            setUser(null);
+            setLoading(false);
+          } else {
+            setUser(session.user);
+            setLoading(false);
+          }
+          break;
+
+        case "SIGNED_OUT":
           setUser(null);
           setLoading(false);
           setSigningOut(false);
-          return;
-        }
+          break;
 
-        setUser(session?.user ?? null);
-        setLoading(false);
+        case "SIGNED_IN":
+          setUser(session?.user ?? null);
+          setLoading(false);
+          break;
+
+        default:
+          setUser(session?.user ?? null);
+          setLoading(false);
+          break;
       }
     });
 
@@ -161,22 +176,22 @@ export function useAuth() {
   const clearAuthState = async () => {
     try {
       // Clear localStorage auth data
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         const keys = Object.keys(localStorage);
-        keys.forEach(key => {
-          if (key.startsWith('sb-') || key.includes('supabase')) {
+        keys.forEach((key) => {
+          if (key.startsWith("sb-") || key.includes("supabase")) {
             localStorage.removeItem(key);
           }
         });
       }
-      
+
       // Sign out from Supabase
       await supabase.auth.signOut();
-      
+
       // Reset state
       setUser(null);
       setLoading(false);
-      
+
       return { error: null };
     } catch (error: unknown) {
       const errorMessage =

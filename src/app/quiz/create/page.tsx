@@ -12,6 +12,8 @@ import {
   useTopics,
   useCurrentUser,
   useInvalidateUserData,
+  useCreateQuiz,
+  usePrefetchQuizPages,
 } from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
 import {
@@ -42,9 +44,10 @@ export default function CreateQuizPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  // Load topics in background - not blocking the UI
-  const { data: topics } = useTopics();
+  const { data: topics = [], isLoading: topicsLoading } = useTopics();
   const invalidateUserData = useInvalidateUserData();
+  const { mutate: createQuiz } = useCreateQuiz();
+  const { prefetchQuizTake } = usePrefetchQuizPages();
 
   // All useState hooks must be at the top, before any conditional logic
   const [isGenerating, setIsGenerating] = useState(false);
@@ -65,12 +68,12 @@ export default function CreateQuizPage() {
   });
 
   // All useCallback hooks must also be at the top
-  const handleInputChange = useCallback((
-    field: keyof QuizGenerationForm,
-    value: string | number | string[]
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }, []);
+  const handleInputChange = useCallback(
+    (field: keyof QuizGenerationForm, value: string | number | string[]) => {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
   const validateForm = useCallback(() => {
     if (!form.title.trim()) {
@@ -91,20 +94,21 @@ export default function CreateQuizPage() {
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
 
-  // Only invalidate data if it's stale or on explicit user action
-  // Removed automatic invalidation on mount for better performance
+  // IMPROVED: More efficient loading logic - show cached data immediately if available
+  const isAuthLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
+  const isDataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
 
-  // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
-  
-  // Show full loading screen for both auth and initial data load, but not during sign out
-  const showFullLoadingScreen = isMainLoading;
-  
-  if (showFullLoadingScreen) {
+  // Show loading screen only when absolutely necessary
+  const showLoadingScreen = isAuthLoading || isDataLoading;
+
+  if (showLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
@@ -183,9 +187,9 @@ export default function CreateQuizPage() {
 
   // Show success screen if quiz was generated
   if (generatedQuiz) {
-  return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-20 space-y-6 sm:space-y-8">
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-20 space-y-6 sm:space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -229,17 +233,18 @@ export default function CreateQuizPage() {
 
                 {/* Action Buttons */}
                 <div className="space-y-4">
-                  <Button
-                    onClick={() =>
-                      router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
-                    }
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-3 sm:py-4 text-base sm:text-lg"
-                  >
-                    <Zap className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    Start Quiz Now
-                  </Button>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                    <Button
+                      onClick={() =>
+                        router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
+                      }
+                      onMouseEnter={() =>
+                        prefetchQuizTake(generatedQuiz.quiz_id)
+                      }
+                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-6 py-3 font-medium shadow-lg hover:shadow-green-500/25 transition-all duration-200"
+                    >
+                      Take Quiz Now
+                    </Button>
                     <Button
                       onClick={() => {
                         if (currentUser?.user_id) {
@@ -248,33 +253,33 @@ export default function CreateQuizPage() {
                         router.push("/dashboard");
                       }}
                       variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50 px-6 py-3"
                     >
                       <Users className="h-4 w-4 mr-2" />
                       Return to Dashboard
                     </Button>
-
-                    <Button
-                      onClick={() => {
-                        setGeneratedQuiz(null);
-                        setForm({
-                          title: "",
-                          description: "",
-                          topic_id: "",
-                          custom_topic: "",
-                          difficulty: 3,
-                          num_questions: 10,
-                          content_source: "",
-                          additional_instructions: "",
-                        });
-                      }}
-                      variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
-                    >
-                      <Brain className="h-4 w-4 mr-2" />
-                      Create Another Quiz
-                    </Button>
                   </div>
+
+                  <Button
+                    onClick={() => {
+                      setGeneratedQuiz(null);
+                      setForm({
+                        title: "",
+                        description: "",
+                        topic_id: "",
+                        custom_topic: "",
+                        difficulty: 3,
+                        num_questions: 10,
+                        content_source: "",
+                        additional_instructions: "",
+                      });
+                    }}
+                    variant="outline"
+                    className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Create Another Quiz
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -560,7 +565,9 @@ export default function CreateQuizPage() {
                 <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-base sm:text-lg font-bold text-blue-300">Pro Tips</h3>
+                <h3 className="text-base sm:text-lg font-bold text-blue-300">
+                  Pro Tips
+                </h3>
                 <ul className="text-xs sm:text-sm text-gray-300 space-y-1">
                   <li>
                     • Provide detailed content for more accurate questions
