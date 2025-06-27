@@ -1,81 +1,47 @@
 # =============================================================================
-# ExamCraft Frontend - Production Dockerfile
+# ExamCraft Frontend - Production Dockerfile (Based on Working Dev Version)
 # =============================================================================
-# This multi-stage Dockerfile optimizes for production deployment with:
-# - Minimal final image size using Alpine Linux
-# - Security best practices (non-root user)
-# - Layer caching optimization
-# - Next.js standalone output for reduced dependencies
+# This Dockerfile is based on the working development version with minimal changes:
+# - Same structure and dependencies as the working dev version
+# - Only changes: NODE_ENV=production and runs built app instead of dev server
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Stage 1: Base image with Node.js
-# -----------------------------------------------------------------------------
-FROM node:20.11.1-alpine AS base
+# Use the same base image as the working development version
+FROM node:20.11.1-alpine
 
-# Install security updates and dependencies needed for node-gyp
+# Install the same dependencies as development (which worked)
 RUN apk update && apk upgrade && \
-    apk add --no-cache libc6-compat dumb-init && \
-    rm -rf /var/cache/apk/*
+    apk add --no-cache \
+        libc6-compat \
+        dumb-init \
+        git \
+        openssh \
+        curl \
+    && rm -rf /var/cache/apk/*
 
 # Set working directory
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user (same as development)
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# -----------------------------------------------------------------------------
-# Stage 2: Install dependencies
-# -----------------------------------------------------------------------------
-FROM base AS deps
-
-# Copy package files
+# Copy package files first for better layer caching (same as dev)
 COPY package.json package-lock.json* ./
 
-# Install dependencies with npm ci for faster, reliable, reproducible builds
+# Install all dependencies (same as development approach that worked)
 RUN npm ci --frozen-lockfile && \
     npm cache clean --force
 
-# -----------------------------------------------------------------------------
-# Stage 3: Build the application
-# -----------------------------------------------------------------------------
-FROM base AS builder
+# Copy source code with proper permissions (same as dev)
+COPY --chown=nextjs:nodejs . .
 
-# Copy node_modules from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-
-# Set build-time environment variables
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=production
-
-# Copy source code
-COPY . .
-
-# Install all dependencies (including devDependencies for build)
-RUN npm ci --frozen-lockfile
-
-# Build the Next.js application
+# Build the Next.js application (this is the main difference from dev)
 RUN npm run build
 
-# -----------------------------------------------------------------------------
-# Stage 4: Production runtime
-# -----------------------------------------------------------------------------
-FROM base AS runner
-
-# Set production environment
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
-    HOSTNAME="0.0.0.0"
-
-# Copy built application from builder stage
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-
-# Create .next directory with proper permissions
-RUN mkdir -p .next && chown nextjs:nodejs .next
+# Create necessary directories with proper permissions (same as dev)
+RUN mkdir -p .next && \
+    chown -R nextjs:nodejs /app
 
 # Switch to non-root user
 USER nextjs
@@ -83,12 +49,18 @@ USER nextjs
 # Expose port
 EXPOSE 3000
 
-# Health check to ensure container is healthy
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node healthcheck.js || exit 1
+# Set production environment variables
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME="0.0.0.0"
 
-# Use dumb-init to handle signals properly
+# Health check (use curl like development version since it worked)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Use dumb-init for proper signal handling (same as dev)
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["node", "server.js"] 
+# Start the production application (only difference from dev CMD)
+CMD ["npm", "run", "start"] 
