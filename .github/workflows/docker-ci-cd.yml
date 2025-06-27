@@ -72,21 +72,40 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          script: |
+                    script: |
             cd examcraft
             # Login to Docker Hub
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-
-            # FIXED: Force pull latest image and clear cache
-            docker pull sajidnoor5051/sajid_private_repo:examcraft-v2
-
-            # Stop and remove existing container with force
+            
+            # FIXED: Stop and remove existing container FIRST
             docker stop examcraft || true
             docker rm examcraft || true
-
-            # FIXED: Remove old images to prevent caching issues
-            docker image prune -f || true
-
+            
+            # FIXED: Aggressive cleanup BEFORE pulling new image to free up space
+            echo "Cleaning up Docker resources to free disk space..."
+            docker system prune -af --volumes || true
+            docker image prune -af || true
+            
+            # Check available disk space
+            echo "Disk space before pull:"
+            df -h
+            
+                        # FIXED: Pull latest image after cleanup
+            if docker pull sajidnoor5051/sajid_private_repo:examcraft-v2; then
+              echo "✅ Successfully pulled new image"
+            else
+              echo "❌ Failed to pull image - checking disk space:"
+              df -h
+              echo "Attempting emergency cleanup..."
+              docker system prune -af --volumes || true
+              echo "Retrying pull..."
+              docker pull sajidnoor5051/sajid_private_repo:examcraft-v2
+            fi
+            
+            # Check disk space after pull
+            echo "Disk space after pull:"
+            df -h
+            
             # Run new container with fresh image
             docker run -d \
               --name examcraft \
@@ -98,10 +117,19 @@ jobs:
               sajidnoor5051/sajid_private_repo:examcraft-v2
               
             # Wait for container to start
-            sleep 10
-
-            # Check if container is running
+            sleep 15
+            
+            # Check if container is running and healthy
+            echo "Container status:"
             docker ps | grep examcraft || echo "Container failed to start"
-
+            
+            # Check container logs for any startup issues
+            echo "Recent container logs:"
+            docker logs examcraft --tail 10 || true
+            
+            # Final disk space check
+            echo "Final disk space:"
+            df -h
+            
             # Logout for security
             docker logout
