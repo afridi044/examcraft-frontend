@@ -39,10 +39,10 @@ jobs:
       - name: Build with docker-compose (no cache)
         run: |
           # Remove any existing images to ensure fresh build
-          docker-compose -f docker-compose.prod.yml down --volumes --remove-orphans || true
+          docker-compose down --volumes --remove-orphans || true
           docker system prune -f || true
-          # Build with no cache to ensure latest source code is used - USE PRODUCTION COMPOSE FILE
-          docker-compose -f docker-compose.prod.yml build --no-cache --force-rm
+          # Build with no cache to ensure latest source code is used - USE ORIGINAL WORKING COMPOSE FILE
+          docker-compose build --no-cache --force-rm
 
       - name: Check Docker images
         run: |
