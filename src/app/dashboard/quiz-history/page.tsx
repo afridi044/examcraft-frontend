@@ -337,91 +337,98 @@ export default function QuizHistoryPage() {
     switch (attempt.status) {
       case "completed":
         return (
-          <div className="flex space-x-2">
-            <Link href={`/quiz/review/${attempt.quiz_id}`}>
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Link href={`/quiz/review/${attempt.quiz_id}`} className="w-full sm:w-auto">
               <Button
                 size="sm"
-                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30"
+                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
               >
                 <BookOpen className="h-3 w-3 mr-1" />
-                Review
+                <span className="hidden sm:inline">Review</span>
+                <span className="sm:hidden">Review</span>
               </Button>
             </Link>
-            <Link href={`/quiz/take/${attempt.quiz_id}`}>
+            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
               <Button
                 size="sm"
-                className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border-green-500/30"
+                className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border-green-500/30 w-full sm:w-auto"
               >
                 <Play className="h-3 w-3 mr-1" />
-                Retake
+                <span className="hidden sm:inline">Retake</span>
+                <span className="sm:hidden">Retake</span>
               </Button>
             </Link>
             <Button
               size="sm"
               onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
               disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
             >
               {isDeleting ? (
                 <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
               ) : (
                 <Trash2 className="h-3 w-3 mr-1" />
               )}
-              {isDeleting ? "Deleting..." : "Delete"}
+              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
+              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
             </Button>
           </div>
         );
       case "incomplete":
         return (
-          <div className="flex space-x-2">
-            <Link href={`/quiz/take/${attempt.quiz_id}`}>
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
               <Button
                 size="sm"
-                className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30"
+                className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border-yellow-500/30 w-full sm:w-auto"
               >
                 <Play className="h-3 w-3 mr-1" />
-                Continue Quiz
+                <span className="hidden sm:inline">Continue Quiz</span>
+                <span className="sm:hidden">Continue</span>
               </Button>
             </Link>
             <Button
               size="sm"
               onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
               disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
             >
               {isDeleting ? (
                 <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
               ) : (
                 <Trash2 className="h-3 w-3 mr-1" />
               )}
-              {isDeleting ? "Deleting..." : "Delete"}
+              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
+              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
             </Button>
           </div>
         );
       case "not_attempted":
         return (
-          <div className="flex space-x-2">
-            <Link href={`/quiz/take/${attempt.quiz_id}`}>
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Link href={`/quiz/take/${attempt.quiz_id}`} className="w-full sm:w-auto">
               <Button
                 size="sm"
-                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30"
+                className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30 w-full sm:w-auto"
               >
                 <Play className="h-3 w-3 mr-1" />
-                Start Quiz
+                <span className="hidden sm:inline">Start Quiz</span>
+                <span className="sm:hidden">Start</span>
               </Button>
             </Link>
             <Button
               size="sm"
               onClick={() => handleDeleteQuiz(attempt.quiz_id, attempt.title)}
               disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 disabled:opacity-50 w-full sm:w-auto"
             >
               {isDeleting ? (
                 <div className="h-3 w-3 mr-1 animate-spin rounded-full border border-red-400 border-t-transparent" />
               ) : (
                 <Trash2 className="h-3 w-3 mr-1" />
               )}
-              {isDeleting ? "Deleting..." : "Delete"}
+              <span className="hidden sm:inline">{isDeleting ? "Deleting..." : "Delete"}</span>
+              <span className="sm:hidden">{isDeleting ? "..." : "Delete"}</span>
             </Button>
           </div>
         );
@@ -481,25 +488,26 @@ export default function QuizHistoryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 p-20 ">
+      <div className="space-y-6 sm:space-y-8 p-4 sm:p-6 lg:p-20">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex items-center space-x-3 sm:space-x-4">
             <Link href="/dashboard">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-400 hover:text-white hover:bg-gray-700/50"
+                className="text-gray-400 hover:text-white hover:bg-gray-700/50 px-2 sm:px-3"
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
+                <ArrowLeft className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                 Quiz History
               </h1>
-              <p className="text-gray-400 mt-1">
+              <p className="text-gray-400 mt-1 text-sm sm:text-base">
                 Track your quiz performance over time
               </p>
             </div>
@@ -507,17 +515,17 @@ export default function QuizHistoryPage() {
         </div>
 
         {/* Statistics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6">
-            <div className="flex items-center space-x-4">
-              <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <BookOpen className="h-6 w-6 text-white" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">
+                <p className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide">
                   Total Quizzes
                 </p>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-xl sm:text-2xl font-bold text-white">
                   {stats.totalQuizzes}
                 </p>
                 <p className="text-xs text-gray-500">
@@ -527,17 +535,17 @@ export default function QuizHistoryPage() {
             </div>
           </Card>
 
-          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6">
-            <div className="flex items-center space-x-4">
-              <div className="h-12 w-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-white" />
+          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">
+                <p className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide">
                   Average Score
                 </p>
                 <p
-                  className={`text-2xl font-bold ${getScoreColors(stats.averageScore).text}`}
+                  className={`text-xl sm:text-2xl font-bold ${getScoreColors(stats.averageScore).text}`}
                 >
                   {stats.completedQuizzes + stats.incompleteQuizzes > 0
                     ? stats.averageScore.toFixed(1)
@@ -548,17 +556,17 @@ export default function QuizHistoryPage() {
             </div>
           </Card>
 
-          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6">
-            <div className="flex items-center space-x-4">
-              <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Target className="h-6 w-6 text-white" />
+          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <Target className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">
+                <p className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide">
                   Pass Rate
                 </p>
                 <p
-                  className={`text-2xl font-bold ${getScoreColors(stats.passRate).text}`}
+                  className={`text-xl sm:text-2xl font-bold ${getScoreColors(stats.passRate).text}`}
                 >
                   {stats.completedQuizzes > 0
                     ? stats.passRate.toFixed(1)
@@ -572,20 +580,22 @@ export default function QuizHistoryPage() {
             </div>
           </Card>
 
-          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6">
-            <div className="flex items-center space-x-4">
-              <div className="h-12 w-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center">
-                <Clock className="h-6 w-6 text-white" />
+          <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center">
+                <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">
+                <p className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide">
                   Avg Time
                 </p>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-xl sm:text-2xl font-bold text-white">
                   {stats.completedQuizzes > 0
                     ? stats.averageTime.toFixed(1)
                     : "--"}
-                  m
+                  <span className="text-sm sm:text-base font-normal text-gray-400 ml-1">
+                    min
+                  </span>
                 </p>
                 <p className="text-xs text-gray-500">Per completed quiz</p>
               </div>
@@ -594,9 +604,9 @@ export default function QuizHistoryPage() {
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6">
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex-1 max-w-md">
+        <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex-1 w-full sm:max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -608,12 +618,12 @@ export default function QuizHistoryPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
-                className="text-gray-300 hover:text-white hover:bg-gray-700/50"
+                className="text-gray-300 hover:text-white hover:bg-gray-700/50 w-full sm:w-auto justify-center sm:justify-start"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filters
@@ -633,7 +643,7 @@ export default function QuizHistoryPage() {
               exit={{ opacity: 0, height: 0 }}
               className="mt-4 pt-4 border-t border-gray-700/50"
             >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Sort By
@@ -643,7 +653,7 @@ export default function QuizHistoryPage() {
                     onChange={(e) =>
                       setSortBy(e.target.value as "date" | "score" | "title")
                     }
-                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-sm sm:text-base"
                   >
                     <option value="date">Date</option>
                     <option value="score">Score</option>
@@ -660,14 +670,14 @@ export default function QuizHistoryPage() {
                     onChange={(e) =>
                       setSortOrder(e.target.value as "asc" | "desc")
                     }
-                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-sm sm:text-base"
                   >
                     <option value="desc">Descending</option>
                     <option value="asc">Ascending</option>
                   </select>
                 </div>
 
-                <div>
+                <div className="sm:col-span-2 lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Filter
                   </label>
@@ -684,7 +694,7 @@ export default function QuizHistoryPage() {
                           | "failed"
                       )
                     }
-                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-sm sm:text-base"
                   >
                     <option value="all">All Quizzes</option>
                     <option value="completed">Completed</option>
@@ -745,34 +755,37 @@ export default function QuizHistoryPage() {
               {filteredAttempts?.map((attempt: QuizAttempt) => (
                 <div
                   key={`${attempt.quiz_id}-${attempt.completed_at}`}
+                  className="w-full"
                 >
-                  <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-6 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-xl font-semibold text-white">
-                            {attempt.title}
-                          </h3>
-
-                          {/* Status Badge */}
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(attempt.status)}`}
-                          >
-                            {getStatusIcon(attempt.status)}
-                            <span className="ml-1.5 capitalize">
-                              {attempt.status.replace("_", " ")}
+                  <Card className="bg-gray-800/70 backdrop-blur-sm border-gray-700/50 p-4 sm:p-6 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-2 sm:mb-0">
+                            <h3 className="text-lg sm:text-xl font-semibold text-white truncate">
+                              {attempt.title}
+                            </h3>
+                            
+                            {/* Status Badge */}
+                            <span
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(attempt.status)} w-fit`}
+                            >
+                              {getStatusIcon(attempt.status)}
+                              <span className="ml-1.5 capitalize">
+                                {attempt.status.replace("_", " ")}
+                              </span>
                             </span>
-                          </span>
+                          </div>
 
-                          {/* Score Badge (only for completed quizzes) */}
+                          {/* Score Badge (only for completed quizzes) - Mobile friendly */}
                           {attempt.status === "completed" && (
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium border ${getScoreColors(attempt.score_percentage).badge}`}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getScoreColors(attempt.score_percentage).badge} w-fit`}
                             >
                               {attempt.score_percentage >= 70 ? (
-                                <CheckCircle className="h-3 w-3 inline mr-1" />
+                                <CheckCircle className="h-3 w-3 mr-1" />
                               ) : (
-                                <XCircle className="h-3 w-3 inline mr-1" />
+                                <XCircle className="h-3 w-3 mr-1" />
                               )}
                               {attempt.score_percentage.toFixed(1)}%
                             </span>

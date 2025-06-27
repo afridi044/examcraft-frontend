@@ -81,7 +81,7 @@ export default function DashboardPage() {
     suffix?: string; 
   }) => {
     return (
-      <p className="text-2xl font-bold text-white">
+      <p className="text-xl sm:text-2xl font-bold text-white">
         {value.toLocaleString()}{suffix}
       </p>
     );
@@ -134,25 +134,33 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 mt-8 p-10">
-
+      <div className="space-y-6 sm:space-y-8 mt-4 sm:mt-8 p-4 sm:p-6 lg:p-10">
+        {/* Welcome Header - Mobile Optimized */}
+        <div className="text-center sm:text-left">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+            Welcome back!
+          </h1>
+          <p className="text-gray-400 text-sm sm:text-base">
+            Here's your learning progress overview
+          </p>
+        </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Total Quizzes Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10">
             <Link
               href="/dashboard/quiz-history"
               className="absolute inset-0 rounded-xl"
               aria-label="View Quiz History"
             />
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <BookOpen className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Quizzes
                   </p>
                   <StatValue 
@@ -162,20 +170,20 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">+12%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">+12%</span>
               </div>
             </div>
           </div>
 
           {/* Total Exams Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-green-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-green-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-500/20">
-                  <Target className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-500/20">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Total Exams
                   </p>
                   <StatValue 
@@ -185,25 +193,25 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">+8%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">+8%</span>
               </div>
             </div>
           </div>
 
           {/* Flashcards Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-purple-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-purple-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/10">
             <Link
               href="/flashcards"
               className="absolute inset-0 rounded-xl"
               aria-label="View Flashcards"
             />
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
-                  <Brain className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
+                  <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Flashcards
                   </p>
                   <StatValue 
@@ -213,20 +221,20 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">+15%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">+15%</span>
               </div>
             </div>
           </div>
 
           {/* Overall Score Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-amber-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-amber-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
-                  <TrendingUp className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Overall Score
                   </p>
                   <StatValue 
@@ -237,20 +245,20 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">+5%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">+5%</span>
               </div>
             </div>
           </div>
 
           {/* Study Streak Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-orange-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-orange-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
-                  <Calendar className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Study Streak
                   </p>
                   <StatValue 
@@ -261,7 +269,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">
+                <span className="text-emerald-400 font-medium hidden sm:inline">
                   Keep it up!
                 </span>
               </div>
@@ -269,14 +277,14 @@ export default function DashboardPage() {
           </div>
 
           {/* Questions Answered Card */}
-          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-indigo-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10">
+          <div className="group relative bg-gray-800/70 backdrop-blur-sm rounded-xl p-4 sm:p-6 border border-gray-700/50 hover:border-indigo-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-10 w-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                  <BarChart3 className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs sm:text-sm font-medium text-gray-400 uppercase tracking-wide">
                     Questions Answered
                   </p>
                   <StatValue 
@@ -286,7 +294,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center space-x-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">+20%</span>
+                <span className="text-emerald-400 font-medium hidden sm:inline">+20%</span>
               </div>
             </div>
           </div>
@@ -294,13 +302,13 @@ export default function DashboardPage() {
 
         {/* Recent Activity */}
         <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-lg shadow-black/10 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-4 border-b border-gray-700/50">
+          <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-3 sm:p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <Clock className="h-4 w-4 text-white" />
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <h2 className="text-lg font-bold text-white">
+                <h2 className="text-base sm:text-lg font-bold text-white">
                   Recent Activity
                 </h2>
               </div>
@@ -309,17 +317,17 @@ export default function DashboardPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowAllActivity(!showAllActivity)}
-                  className="text-sm text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200"
+                  className="text-xs sm:text-sm text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 px-2 sm:px-3"
                 >
                   {showAllActivity ? (
                     <>
-                      <ChevronUp className="h-4 w-4 mr-1" />
-                      Show Less
+                      <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      <span className="hidden sm:inline">Show Less</span>
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-4 w-4 mr-1" />
-                      View All
+                      <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      <span className="hidden sm:inline">View All</span>
                     </>
                   )}
                 </Button>
@@ -327,7 +335,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {safeRecentActivity.length > 0 ? (
               <div className="space-y-2">
                 {(showAllActivity
@@ -336,26 +344,25 @@ export default function DashboardPage() {
                 ).map((activity: any) => (
                   <div
                     key={activity.id}
-                    className="group flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
+                    className="group flex items-center justify-between p-2 sm:p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 bg-gray-600/50 rounded-lg flex items-center justify-center group-hover:bg-gray-600/70 transition-colors duration-200">
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                      <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gray-600/50 rounded-lg flex items-center justify-center group-hover:bg-gray-600/70 transition-colors duration-200 flex-shrink-0">
                         <div className="text-gray-300 group-hover:text-white transition-colors duration-200">
                           {getActivityIcon(activity.type)}
                         </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-white group-hover:text-blue-300 transition-colors duration-200 text-sm sm:text-base truncate">
                           {activity.title}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {activity.type.charAt(0).toUpperCase() +
-                            activity.type.slice(1)}{" "}
-                          • {formatDate(activity.completed_at)}
+                          <span className="capitalize">{activity.type}</span>
+                          <span className="hidden sm:inline"> • {formatDate(activity.completed_at)}</span>
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       {activity.score !== undefined && (
                         <span className="px-2 py-0.5 bg-green-500/10 text-green-400 text-xs font-medium rounded-full border border-green-500/20">
                           {activity.score}%
@@ -366,14 +373,14 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <div className="h-12 w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                  <BookOpen className="h-6 w-6 text-gray-500" />
+              <div className="text-center py-6 sm:py-8">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />
                 </div>
-                <p className="font-medium text-gray-300 mb-1">
+                <p className="font-medium text-gray-300 mb-1 text-sm sm:text-base">
                   No recent activity
                 </p>
-                <p className="text-sm text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-400">
                   Start taking quizzes to see your activity here
                 </p>
               </div>
@@ -383,30 +390,30 @@ export default function DashboardPage() {
 
         {/* Topic Progress */}
         <div className="bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-lg shadow-black/10 overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-4 border-b border-gray-700/50">
+          <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3 sm:p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
-                  <BarChart3 className="h-4 w-4 text-white" />
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
+                  <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <h2 className="text-lg font-bold text-white">Topic Progress</h2>
+                <h2 className="text-base sm:text-lg font-bold text-white">Topic Progress</h2>
               </div>
               {safeTopicProgress.length > 3 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowAllProgress(!showAllProgress)}
-                  className="text-sm text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200"
+                  className="text-xs sm:text-sm text-gray-400 hover:text-white hover:bg-gray-700/50 transition-all duration-200 px-2 sm:px-3"
                 >
                   {showAllProgress ? (
                     <>
-                      <ChevronUp className="h-4 w-4 mr-1" />
-                      Show Less
+                      <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      <span className="hidden sm:inline">Show Less</span>
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-4 w-4 mr-1" />
-                      View All
+                      <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      <span className="hidden sm:inline">View All</span>
                     </>
                   )}
                 </Button>
@@ -414,7 +421,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {safeTopicProgress.length > 0 ? (
               <div className="space-y-2">
                 {(showAllProgress
@@ -423,23 +430,23 @@ export default function DashboardPage() {
                 ).map((topic: any) => (
                   <div
                     key={topic.topic_id}
-                    className="group flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
+                    className="group flex items-center justify-between p-2 sm:p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-all duration-200"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 bg-gray-600/50 rounded-lg flex items-center justify-center group-hover:bg-gray-600/70 transition-colors duration-200">
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                      <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gray-600/50 rounded-lg flex items-center justify-center group-hover:bg-gray-600/70 transition-colors duration-200 flex-shrink-0">
                         <div className="text-gray-300 group-hover:text-white transition-colors duration-200">
-                          <BarChart3 className="h-4 w-4" />
+                          <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
                         </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-white group-hover:text-purple-300 transition-colors duration-200">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-white group-hover:text-purple-300 transition-colors duration-200 text-sm sm:text-base truncate">
                           {topic.topic_name}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-400 mb-1">
                           {topic.questions_correct} of{" "}
                           {topic.questions_attempted} questions correct
                         </p>
-                        <div className="w-full bg-gray-600/30 rounded-full h-1.5 mt-1.5 overflow-hidden">
+                        <div className="w-full bg-gray-600/30 rounded-full h-1.5 overflow-hidden">
                           <div
                             className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all duration-500"
                             style={{ width: `${topic.progress_percentage}%` }}
@@ -447,7 +454,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-xs font-medium rounded-full border border-purple-500/20">
                         {topic.progress_percentage}%
                       </span>
@@ -456,14 +463,14 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <div className="h-12 w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                  <Target className="h-6 w-6 text-gray-500" />
+              <div className="text-center py-6 sm:py-8">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <Target className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />
                 </div>
-                <p className="font-medium text-gray-300 mb-1">
+                <p className="font-medium text-gray-300 mb-1 text-sm sm:text-base">
                   No progress data
                 </p>
-                <p className="text-sm text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-400">
                   Answer questions to track your progress by topic
                 </p>
               </div>
