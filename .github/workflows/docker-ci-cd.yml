@@ -39,10 +39,10 @@ jobs:
       - name: Build with docker-compose (no cache)
         run: |
           # Remove any existing images to ensure fresh build
-          docker-compose down --volumes --remove-orphans || true
+          docker-compose -f docker-compose.prod.yml down --volumes --remove-orphans || true
           docker system prune -f || true
-          # Build with no cache to ensure latest source code is used
-          docker-compose build --no-cache --force-rm
+          # Build with no cache to ensure latest source code is used - USE PRODUCTION COMPOSE FILE
+          docker-compose -f docker-compose.prod.yml build --no-cache --force-rm
 
       - name: Check Docker images
         run: |
@@ -54,6 +54,7 @@ jobs:
           COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           IMAGE_TAG="examcraft-v2-${COMMIT_SHA}-${TIMESTAMP}"
 
+          # Tag the production image (using production compose file naming)
           docker tag examcraft-frontend_examcraft-frontend:latest sajidnoor5051/sajid_private_repo:${IMAGE_TAG}
           docker tag examcraft-frontend_examcraft-frontend:latest sajidnoor5051/sajid_private_repo:examcraft-v2
 
