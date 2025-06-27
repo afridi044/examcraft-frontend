@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -91,22 +91,27 @@ export default function CreateQuizPage() {
     return true;
   }, [form.title, form.topic_id, form.custom_topic, form.num_questions]);
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [loading, user, router]);
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
-  // IMPROVED: More efficient loading logic - show cached data immediately if available
-  const isAuthLoading =
-    loading ||
-    (loading === false && user && userLoading) ||
-    (loading === false && user && !currentUser);
-  const isDataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
+  // OPTIMIZED: Memoize loading states to prevent unnecessary recalculations
+  const { isAuthLoading, isDataLoading, showLoadingScreen } = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
 
-  // Show loading screen only when absolutely necessary
-  const showLoadingScreen = isAuthLoading || isDataLoading;
+    return {
+      isAuthLoading: authLoading,
+      isDataLoading: dataLoading,
+      showLoadingScreen: authLoading || dataLoading,
+    };
+  }, [loading, user, userLoading, currentUser, topicsLoading, topics]);
 
   if (showLoadingScreen) {
     return (

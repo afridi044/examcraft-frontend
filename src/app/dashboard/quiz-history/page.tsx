@@ -82,12 +82,12 @@ export default function QuizHistoryPage() {
   // Use the database user_id
   const userId = currentUser?.user_id || "";
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [loading, user, router]);
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
@@ -99,20 +99,31 @@ export default function QuizHistoryPage() {
     error,
   } = useUserQuizAttempts(userId);
 
-  // IMPROVED: More efficient loading logic - show cached data immediately if available
-  const isAuthLoading =
-    loading ||
-    (loading === false && user && userLoading) ||
-    (loading === false && user && !currentUser);
+  // OPTIMIZED: Memoize loading states to prevent unnecessary recalculations
+  const { isAuthLoading, isDataLoading, showLoadingScreen } = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading = userId && loadingAttempts && !quizAttempts; // Only show loading if we have no data at all and we're actually loading
 
-  // Only show loading if we have no data at all and we're actually loading
-  const isDataLoading = userId && loadingAttempts && !quizAttempts;
+    return {
+      isAuthLoading: authLoading,
+      isDataLoading: dataLoading,
+      showLoadingScreen: authLoading || dataLoading,
+    };
+  }, [
+    loading,
+    user,
+    userLoading,
+    currentUser,
+    userId,
+    loadingAttempts,
+    quizAttempts,
+  ]);
 
-  // Show loading screen only when absolutely necessary
-  const showLoadingScreen = isAuthLoading || isDataLoading;
-
-  // For safer data access with defaults - show cached data immediately
-  const safeQuizAttempts = quizAttempts || [];
+  // OPTIMIZED: Memoize safe data to prevent array re-creation
+  const safeQuizAttempts = useMemo(() => quizAttempts || [], [quizAttempts]);
 
   // OPTIMIZED: Memoize the expensive calculations with better dependency array
   const { stats, filteredAttempts } = useMemo(() => {

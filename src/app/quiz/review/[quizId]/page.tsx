@@ -88,12 +88,12 @@ export default function QuizReviewPage() {
   // Convert query error to string for consistency
   const error = reviewError?.message || null;
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/");
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // OPTIMIZED: Memoized utility functions
   const formatTime = useCallback((seconds: number) => {

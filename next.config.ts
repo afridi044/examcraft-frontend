@@ -16,16 +16,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   // DEVELOPMENT PERFORMANCE OPTIMIZATIONS
-  ...(process.env.NODE_ENV === "development" && {
-    // Faster development builds
-    swcMinify: false, // Disable minification in dev for speed
-    typescript: {
-      ignoreBuildErrors: true, // Skip type checking in dev for speed
-    },
-    eslint: {
-      ignoreDuringBuilds: true, // Skip linting in dev for speed
-    },
-  }),
+  ...(process.env.NODE_ENV === "development" &&
+    {
+      // Skip type checking in dev for speed (handled by main config above)
+    }),
 
   // Performance optimizations
   experimental: {
@@ -38,26 +32,24 @@ const nextConfig: NextConfig = {
       "framer-motion",
       "chart.js",
     ],
-    // Turbo optimizations
-    turbo: {
-      resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
-      // Reduce file watching for faster rebuilds
-      rules: {
-        "*.{js,jsx,ts,tsx}": {
-          loaders: ["swc-loader"],
-          as: "*.js",
-        },
-      },
-    },
     // Enable concurrent features for better performance
     cpus: Math.max(1, require("os").cpus().length - 1),
   },
 
-  // Optimize bundling and loading
-  compiler: {
-    // Remove console.log in production
-    removeConsole: process.env.NODE_ENV === "production",
+  // Turbopack configuration (stable in Next.js 15)
+  turbopack: {
+    resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
   },
+
+  // FAST REFRESH OPTIMIZATION: Prevent multiple rebuilds
+  ...(process.env.NODE_ENV === "development" && {
+    onDemandEntries: {
+      // Extend the period for disposing inactive pages
+      maxInactiveAge: 60 * 1000, // 1 minute
+      // Reduce the number of pages that should be kept simultaneously
+      pagesBufferLength: 2,
+    },
+  }),
 
   // Image optimization
   images: {
@@ -85,7 +77,7 @@ const nextConfig: NextConfig = {
           splitChunks: false,
         };
 
-        // Reduce file watching overhead
+        // OPTIMIZED: Reduce file watching overhead and prevent multiple rebuilds
         config.watchOptions = {
           ignored: [
             "**/node_modules/**",
@@ -93,8 +85,26 @@ const nextConfig: NextConfig = {
             "**/.next/**",
             "**/dist/**",
             "**/build/**",
+            "**/.env*",
+            "**/public/**",
           ],
-          aggregateTimeout: 300,
+          aggregateTimeout: 500, // Increased to batch file changes
+          poll: false, // Disable polling to prevent excessive rebuilds
+        };
+
+        // FAST REFRESH OPTIMIZATION: Reduce rebuild triggers
+        config.cache = {
+          type: "memory",
+          // Prevent cache invalidation on every file change
+          buildDependencies: {
+            config: [__filename],
+          },
+        };
+
+        // Optimize module resolution for faster rebuilds
+        config.resolve = {
+          ...config.resolve,
+          symlinks: false, // Disable symlink resolution for speed
         };
       }
       return config;

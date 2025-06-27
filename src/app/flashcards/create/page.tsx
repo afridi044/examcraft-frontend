@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
@@ -154,12 +154,12 @@ function CreateFlashcardPageContent() {
     }
   }, [validateForm, currentUser, topics, form, invalidateUserData]);
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [loading, user, router]);
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // Set initial topic name if preselected topic exists
   useEffect(() => {
@@ -176,15 +176,20 @@ function CreateFlashcardPageContent() {
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
 
-  // IMPROVED: More efficient loading logic - show cached data immediately if available
-  const isAuthLoading =
-    loading ||
-    (loading === false && user && userLoading) ||
-    (loading === false && user && !currentUser);
-  const isDataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
+  // OPTIMIZED: Memoize loading states to prevent unnecessary recalculations
+  const { isAuthLoading, isDataLoading, showLoadingScreen } = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
 
-  // Show loading screen only when absolutely necessary
-  const showLoadingScreen = isAuthLoading || isDataLoading;
+    return {
+      isAuthLoading: authLoading,
+      isDataLoading: dataLoading,
+      showLoadingScreen: authLoading || dataLoading,
+    };
+  }, [loading, user, userLoading, currentUser, topicsLoading, topics]);
 
   if (showLoadingScreen) {
     return (

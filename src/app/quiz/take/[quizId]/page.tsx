@@ -50,12 +50,12 @@ export default function TakeQuizPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const { prefetchQuizReview } = usePrefetchQuizPages();
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [loading, user, router]);
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // Only invalidate data if it's stale or on explicit user action
   // Removed automatic invalidation on mount for better performance
@@ -101,21 +101,21 @@ export default function TakeQuizPage() {
     };
   }, [quiz?.quiz_questions, currentQuestionIndex, userAnswers]);
 
-  // OPTIMIZED: Timer with reduced update frequency
+  // OPTIMIZED: Timer with reduced update frequency and memoized callback
+  const updateTimer = useCallback(() => {
+    if (!quizStartTime) return;
+    const newTimeElapsed = Math.floor(
+      (Date.now() - quizStartTime.getTime()) / 1000
+    );
+    setTimeElapsed((prev) => (prev !== newTimeElapsed ? newTimeElapsed : prev));
+  }, [quizStartTime]);
+
   useEffect(() => {
     if (!quizStartTime) return;
 
-    const timer = setInterval(() => {
-      const newTimeElapsed = Math.floor(
-        (Date.now() - quizStartTime.getTime()) / 1000
-      );
-      setTimeElapsed((prev) =>
-        prev !== newTimeElapsed ? newTimeElapsed : prev
-      );
-    }, 1000);
-
+    const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [quizStartTime]);
+  }, [updateTimer]);
 
   // Initialize quiz
   useEffect(() => {

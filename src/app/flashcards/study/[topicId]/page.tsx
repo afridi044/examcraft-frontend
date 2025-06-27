@@ -49,12 +49,12 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   const { user, loading } = useAuth();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
-  // Redirect to landing page if not authenticated and not loading
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
-  }, [loading, user, router]);
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   const queryClient = useQueryClient();
 
@@ -74,8 +74,10 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
     cardsRemaining: 0,
   });
 
-  // Track which cards have been answered to prevent double counting
-  const [answeredCards, setAnsweredCards] = useState<Set<string>>(new Set());
+  // OPTIMIZED: Track which cards have been answered to prevent double counting
+  const [answeredCards, setAnsweredCards] = useState<Set<string>>(
+    () => new Set()
+  );
 
   // OPTIMIZED: Streamlined session initialization with useCallback
   const initializeSession = useCallback(

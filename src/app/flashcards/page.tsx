@@ -177,7 +177,7 @@ const TopicCard = ({
   );
 };
 
-// OPTIMIZED: Flashcard component with reduced re-renders
+// OPTIMIZED: Flashcard component with reduced re-renders - MOVED OUTSIDE MAIN COMPONENT
 const FlashCard = ({ flashcard, index }: FlashCardProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -189,9 +189,9 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
   );
 
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
+  const handleFlip = useCallback(() => {
+    setIsFlipped((prev) => !prev);
+  }, []);
 
   return (
     <motion.div

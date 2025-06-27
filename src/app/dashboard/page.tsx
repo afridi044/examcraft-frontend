@@ -20,10 +20,34 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import type { RecentActivity, TopicProgress } from "@/types/database";
+
+// Move StatValue outside component to prevent re-creation
+const StatValue = ({
+  value,
+  suffix = "",
+}: {
+  value: number;
+  suffix?: string;
+}) => (
+  <p className="text-xl sm:text-2xl font-bold text-white">
+    {value.toLocaleString()}
+    {suffix}
+  </p>
+);
+
+// Default stats object - moved outside to prevent re-creation
+const DEFAULT_STATS = {
+  totalQuizzes: 0,
+  totalExams: 0,
+  totalFlashcards: 0,
+  averageScore: 0,
+  studyStreak: 0,
+  questionsAnswered: 0,
+};
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -37,71 +61,60 @@ export default function DashboardPage() {
   // Get current user profile data for proper database user ID
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
-  // Use the database user_id
-  const userId = currentUser?.user_id || "";
-
-  // Redirect to landing page if not authenticated and not loading
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/");
-    }
-  }, [loading, user, router]);
+  // OPTIMIZED: Memoize userId to prevent unnecessary re-renders
+  const userId = useMemo(
+    () => currentUser?.user_id || "",
+    [currentUser?.user_id]
+  );
 
   // OPTIMIZED: Use the new batched dashboard hook for best performance with improved settings
   const dashboardData = useOptimizedDashboard(userId);
 
-  // Extract data from the optimized hook
-  const stats = dashboardData.data?.stats;
-  const recentActivity = dashboardData.data?.recentActivity || [];
-  const topicProgress = dashboardData.data?.topicProgress || [];
+  // Memoize extracted data to prevent unnecessary re-renders
+  const { stats, recentActivity, topicProgress } = useMemo(
+    () => ({
+      stats: dashboardData.data?.stats,
+      recentActivity: dashboardData.data?.recentActivity || [],
+      topicProgress: dashboardData.data?.topicProgress || [],
+    }),
+    [dashboardData.data]
+  );
 
-  // IMPROVED: More efficient loading logic - show cached data immediately if available
-  const isAuthLoading =
-    loading ||
-    (loading === false && user && userLoading) ||
-    (loading === false && user && !currentUser);
-  const isDataLoading =
-    userId && dashboardData.isLoading && !dashboardData.data; // Only show loading if no cached data
+  // Memoize loading states to prevent unnecessary recalculations
+  const showLoadingScreen = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading =
+      userId && dashboardData.isLoading && !dashboardData.data;
 
-  // Show loading screen only when absolutely necessary
-  const showLoadingScreen = isAuthLoading || isDataLoading;
+    return authLoading || dataLoading;
+  }, [
+    loading,
+    user,
+    userLoading,
+    currentUser,
+    userId,
+    dashboardData.isLoading,
+    dashboardData.data,
+  ]);
 
-  // For safer data access with defaults
-  const safeStats = stats || {
-    totalQuizzes: 0,
-    totalExams: 0,
-    totalFlashcards: 0,
-    averageScore: 0,
-    studyStreak: 0,
-    questionsAnswered: 0,
-  };
-  const safeRecentActivity = recentActivity || [];
-  const safeTopicProgress = topicProgress || [];
+  // Memoize safe data to prevent object re-creation
+  const safeStats = useMemo(() => stats || DEFAULT_STATS, [stats]);
+  const safeRecentActivity = useMemo(() => recentActivity, [recentActivity]);
+  const safeTopicProgress = useMemo(() => topicProgress, [topicProgress]);
 
-  const StatValue = ({
-    value,
-    suffix = "",
-  }: {
-    value: number;
-    suffix?: string;
-  }) => {
-    return (
-      <p className="text-xl sm:text-2xl font-bold text-white">
-        {value.toLocaleString()}
-        {suffix}
-      </p>
-    );
-  };
-
-  const formatDate = (dateString: string) => {
+  // Memoize utility functions
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
-  };
+  }, []);
 
-  const getActivityIcon = (type: string) => {
+  const getActivityIcon = useCallback((type: string) => {
     switch (type) {
       case "quiz":
         return <BookOpen className="h-4 w-4" />;
@@ -112,7 +125,7 @@ export default function DashboardPage() {
       default:
         return <BookOpen className="h-4 w-4" />;
     }
-  };
+  }, []);
 
   // Prefetch quiz history data when hovering over the link
   const handleQuizHistoryHover = useCallback(() => {
@@ -121,6 +134,13 @@ export default function DashboardPage() {
       prefetchQuizHistory(currentUser.user_id);
     }
   }, [prefetchQuizHistory, currentUser?.user_id]);
+
+  // FIXED: Optimize redirect logic with proper memoization
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/");
+    }
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // Single loading screen for all loading states
   if (showLoadingScreen) {

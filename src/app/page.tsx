@@ -21,12 +21,12 @@ import {
   X,
 } from "lucide-react";
 
-// Simple Counter Component for better performance
+// MOVED OUTSIDE COMPONENT: Simple Counter Component for better performance
 const StaticCounter = ({ value }: { value: number }) => {
   return <span>{value}</span>;
 };
 
-// Animated Counter Component with smooth counting animation
+// MOVED OUTSIDE COMPONENT: Animated Counter Component with smooth counting animation
 const AnimatedCounter = ({ value }: { value: number }) => {
   const [currentValue, setCurrentValue] = useState(0);
   const shouldReduceMotion = useReducedMotion();
@@ -40,22 +40,24 @@ const AnimatedCounter = ({ value }: { value: number }) => {
     const duration = 2000; // 2 seconds
     const startTime = Date.now();
     const startValue = 0;
-    
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
+
       // Easing function for smooth animation
       const easeOut = 1 - Math.pow(1 - progress, 3);
-      const currentVal = Math.round(startValue + (value - startValue) * easeOut);
-      
+      const currentVal = Math.round(
+        startValue + (value - startValue) * easeOut
+      );
+
       setCurrentValue(currentVal);
-      
+
       if (progress < 1) {
         requestAnimationFrame(animate);
       }
     };
-    
+
     const timeout = setTimeout(animate, 500); // Start after 500ms delay
     return () => clearTimeout(timeout);
   }, [value, shouldReduceMotion]);
@@ -75,10 +77,14 @@ const FloatingElement = ({
 
   return (
     <motion.div
-      animate={shouldReduceMotion ? {} : {
-        y: [-10, 10, -10],
-        rotate: [-1, 1, -1],
-      }}
+      animate={
+        shouldReduceMotion
+          ? {}
+          : {
+              y: [-10, 10, -10],
+              rotate: [-1, 1, -1],
+            }
+      }
       transition={{
         duration: 6,
         repeat: Infinity,
@@ -98,17 +104,21 @@ const GradientOrb = ({ className }: { className?: string }) => {
   return (
     <motion.div
       className={`absolute rounded-full blur-3xl will-change-transform ${className}`}
-      animate={shouldReduceMotion ? { opacity: 0.2 } : {
-        scale: [1, 1.2, 1],
-        opacity: [0.2, 0.3, 0.2],
-      }}
+      animate={
+        shouldReduceMotion
+          ? { opacity: 0.2 }
+          : {
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.3, 0.2],
+            }
+      }
       transition={{
         duration: 8,
         repeat: Infinity,
         ease: "easeInOut",
       }}
       style={{
-        willChange: 'transform, opacity'
+        willChange: "transform, opacity",
       }}
     />
   );
@@ -132,32 +142,42 @@ const FeatureCard = ({
     <motion.div
       initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
       whileInView={{ opacity: 1, y: 0 }}
-      transition={{ 
-        duration: shouldReduceMotion ? 0.3 : 0.6, 
+      transition={{
+        duration: shouldReduceMotion ? 0.3 : 0.6,
         delay: shouldReduceMotion ? 0 : delay,
-        ease: "easeOut"
+        ease: "easeOut",
       }}
-      whileHover={shouldReduceMotion ? {} : {
-        scale: 1.02,
-        transition: { duration: 0.2 }
-      }}
+      whileHover={
+        shouldReduceMotion
+          ? {}
+          : {
+              scale: 1.02,
+              transition: { duration: 0.2 },
+            }
+      }
       className="group h-full"
-      style={{ willChange: 'transform' }}
+      style={{ willChange: "transform" }}
     >
       <Card className="p-6 md:p-8 bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:border-purple-500/30 transition-all duration-300 h-full">
         <motion.div
           className="mb-4 md:mb-6 p-3 md:p-4 w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-purple-600/30 to-blue-600/30 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-300"
-          whileHover={shouldReduceMotion ? {} : { 
-            rotate: 180,
-            transition: { duration: 0.8 }
-          }}
+          whileHover={
+            shouldReduceMotion
+              ? {}
+              : {
+                  rotate: 180,
+                  transition: { duration: 0.8 },
+                }
+          }
         >
           <Icon className="w-6 h-6 md:w-8 md:h-8 text-purple-400" />
         </motion.div>
         <h3 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-white group-hover:text-purple-300 transition-colors duration-300">
           {title}
         </h3>
-        <p className="text-gray-300 leading-relaxed text-sm md:text-base">{description}</p>
+        <p className="text-gray-300 leading-relaxed text-sm md:text-base">
+          {description}
+        </p>
         <motion.div
           className="mt-4 md:mt-6 flex items-center text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           initial={{ x: -10 }}
@@ -191,17 +211,21 @@ const TestimonialCard = ({
     <motion.div
       initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
       whileInView={{ opacity: 1, scale: 1 }}
-      transition={{ 
-        duration: shouldReduceMotion ? 0.3 : 0.6, 
+      transition={{
+        duration: shouldReduceMotion ? 0.3 : 0.6,
         delay: shouldReduceMotion ? 0 : delay,
-        ease: "easeOut"
+        ease: "easeOut",
       }}
-      whileHover={shouldReduceMotion ? {} : { 
-        y: -5,
-        transition: { duration: 0.2 }
-      }}
+      whileHover={
+        shouldReduceMotion
+          ? {}
+          : {
+              y: -5,
+              transition: { duration: 0.2 },
+            }
+      }
       className="group h-full"
-      style={{ willChange: 'transform' }}
+      style={{ willChange: "transform" }}
     >
       <Card className="p-4 md:p-6 bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:border-purple-500/30 transition-all duration-300 h-full">
         <div className="flex mb-3 md:mb-4">
@@ -222,7 +246,9 @@ const TestimonialCard = ({
             {name.charAt(0)}
           </div>
           <div className="ml-3 md:ml-4">
-            <div className="font-bold text-white text-sm md:text-base">{name}</div>
+            <div className="font-bold text-white text-sm md:text-base">
+              {name}
+            </div>
             <div className="text-xs md:text-sm text-gray-400">{role}</div>
           </div>
         </div>
@@ -267,9 +293,9 @@ const MobileNavigation = () => {
       <motion.div
         initial={{ x: "100%" }}
         animate={{ x: isMobileMenuOpen ? 0 : "100%" }}
-        transition={{ 
+        transition={{
           duration: shouldReduceMotion ? 0.1 : 0.3,
-          ease: "easeInOut"
+          ease: "easeInOut",
         }}
         className="fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700 shadow-2xl z-50 md:hidden"
       >
@@ -311,10 +337,10 @@ const MobileNavigation = () => {
               <Star className="w-5 h-5 mr-3 text-yellow-400" />
               Reviews
             </Link>
-            
+
             {/* Divider */}
             <div className="my-6 border-t border-gray-700"></div>
-            
+
             {/* Action Buttons */}
             <div className="space-y-3">
               <Button
@@ -322,8 +348,8 @@ const MobileNavigation = () => {
                 className="w-full h-12 !border-2 !border-gray-600 !text-gray-200 !bg-gray-800 hover:!bg-gray-700 hover:!text-white hover:!border-gray-500 !transition-all !duration-300 !rounded-xl !font-medium"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link 
-                  href="/auth/signin" 
+                <Link
+                  href="/auth/signin"
                   prefetch={true}
                   className="flex items-center justify-center space-x-2"
                 >
@@ -331,12 +357,15 @@ const MobileNavigation = () => {
                   <span>Sign In</span>
                 </Link>
               </Button>
-              
-              <Button 
+
+              <Button
                 className="w-full h-12 !bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300 !rounded-xl !font-medium !shadow-lg hover:!shadow-purple-500/25"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link href="/auth/signup" className="flex items-center justify-center space-x-2">
+                <Link
+                  href="/auth/signup"
+                  className="flex items-center justify-center space-x-2"
+                >
                   <ArrowRight className="w-4 h-4" />
                   <span>Start Free Trial</span>
                 </Link>
@@ -347,7 +376,9 @@ const MobileNavigation = () => {
             <div className="mt-8 p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-400/30 bg-gray-800">
               <div className="flex items-center space-x-2 mb-2">
                 <Trophy className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-medium text-purple-300">Free Trial Available</span>
+                <span className="text-sm font-medium text-purple-300">
+                  Free Trial Available
+                </span>
               </div>
               <p className="text-xs text-gray-300 leading-relaxed">
                 No credit card required • 14-day free trial • Cancel anytime
@@ -372,37 +403,41 @@ export default function Home() {
         <GradientOrb className="w-64 h-64 md:w-96 md:h-96 bg-emerald-500 -bottom-32 left-1/4 md:-bottom-48 md:left-1/3" />
 
         {/* Floating Particles - Reduced number on mobile */}
-        {shouldReduceMotion ? null : [
-          { left: 22.5, top: 99.5, duration: 4.2, delay: 0.5 },
-          { left: 65.6, top: 12.7, duration: 3.8, delay: 1.2 },
-          { left: 78.9, top: 83.6, duration: 4.5, delay: 0.3 },
-          { left: 56.8, top: 66.9, duration: 3.6, delay: 1.8 },
-          { left: 39.5, top: 74.4, duration: 4.1, delay: 0.7 },
-          { left: 50.8, top: 28.8, duration: 3.9, delay: 1.5 },
-          { left: 22.2, top: 65.8, duration: 4.3, delay: 0.2 },
-          { left: 74.3, top: 90.7, duration: 3.7, delay: 1.1 },
-          { left: 63.3, top: 64.1, duration: 4.0, delay: 0.9 },
-          { left: 56.6, top: 10.6, duration: 3.5, delay: 1.7 },
-        ].slice(0, 6).map((particle, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-white rounded-full opacity-30 hidden md:block"
-            style={{
-              left: `${particle.left}%`,
-              top: `${particle.top}%`,
-              willChange: 'transform, opacity'
-            }}
-            animate={{
-              y: [-20, -100],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: particle.duration,
-              repeat: Infinity,
-              delay: particle.delay,
-            }}
-          />
-        ))}
+        {shouldReduceMotion
+          ? null
+          : [
+              { left: 22.5, top: 99.5, duration: 4.2, delay: 0.5 },
+              { left: 65.6, top: 12.7, duration: 3.8, delay: 1.2 },
+              { left: 78.9, top: 83.6, duration: 4.5, delay: 0.3 },
+              { left: 56.8, top: 66.9, duration: 3.6, delay: 1.8 },
+              { left: 39.5, top: 74.4, duration: 4.1, delay: 0.7 },
+              { left: 50.8, top: 28.8, duration: 3.9, delay: 1.5 },
+              { left: 22.2, top: 65.8, duration: 4.3, delay: 0.2 },
+              { left: 74.3, top: 90.7, duration: 3.7, delay: 1.1 },
+              { left: 63.3, top: 64.1, duration: 4.0, delay: 0.9 },
+              { left: 56.6, top: 10.6, duration: 3.5, delay: 1.7 },
+            ]
+              .slice(0, 6)
+              .map((particle, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute w-1 h-1 bg-white rounded-full opacity-30 hidden md:block"
+                  style={{
+                    left: `${particle.left}%`,
+                    top: `${particle.top}%`,
+                    willChange: "transform, opacity",
+                  }}
+                  animate={{
+                    y: [-20, -100],
+                    opacity: [0, 1, 0],
+                  }}
+                  transition={{
+                    duration: particle.duration,
+                    repeat: Infinity,
+                    delay: particle.delay,
+                  }}
+                />
+              ))}
       </div>
 
       <div className="relative z-10">
@@ -416,10 +451,14 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 flex justify-between items-center">
             <motion.div
               className="flex items-center space-x-2"
-              whileHover={shouldReduceMotion ? {} : { 
-                scale: 1.02,
-                transition: { duration: 0.3 }
-              }}
+              whileHover={
+                shouldReduceMotion
+                  ? {}
+                  : {
+                      scale: 1.02,
+                      transition: { duration: 0.3 },
+                    }
+              }
             >
               <div className="p-2 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-lg border border-purple-400/30">
                 <Brain className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
@@ -428,7 +467,7 @@ export default function Home() {
                 ExamCraft
               </span>
             </motion.div>
-            
+
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2">
               <Link
@@ -443,20 +482,26 @@ export default function Home() {
               >
                 Reviews
               </Link>
-              
+
               {/* Desktop Action Buttons */}
               <div className="flex items-center space-x-3 ml-4">
                 <Button
                   variant="outline"
                   className="!border-2 !border-gray-600 !text-gray-200 !bg-gray-800 hover:!bg-gray-700 hover:!text-white hover:!border-gray-500 !transition-all !duration-300 !rounded-lg !font-medium"
                 >
-                  <Link href="/auth/signin" className="flex items-center space-x-2">
+                  <Link
+                    href="/auth/signin"
+                    className="flex items-center space-x-2"
+                  >
                     <Users className="w-4 h-4" />
                     <span>Sign In</span>
                   </Link>
                 </Button>
                 <Button className="!bg-gradient-to-r !from-purple-600 !to-blue-600 hover:!from-purple-700 hover:!to-blue-700 !text-white !transition-all !duration-300 !rounded-lg !font-medium !shadow-lg hover:!shadow-purple-500/25">
-                  <Link href="/auth/signup" className="flex items-center space-x-2">
+                  <Link
+                    href="/auth/signup"
+                    className="flex items-center space-x-2"
+                  >
                     <ArrowRight className="w-4 h-4" />
                     <span>Start Free Trial</span>
                   </Link>
@@ -469,7 +514,7 @@ export default function Home() {
           </div>
         </motion.nav>
 
-      {/* Hero Section */}
+        {/* Hero Section */}
         <section className="pt-20 md:pt-32 pb-12 md:pb-20 px-4 md:px-6">
           <div className="max-w-7xl mx-auto text-center">
             <motion.div
@@ -481,17 +526,21 @@ export default function Home() {
                 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black mb-4 md:mb-6 leading-tight px-2"
                 initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ 
-                  duration: shouldReduceMotion ? 0.3 : 1, 
-                  delay: shouldReduceMotion ? 0 : 0.2 
+                transition={{
+                  duration: shouldReduceMotion ? 0.3 : 1,
+                  delay: shouldReduceMotion ? 0 : 0.2,
                 }}
               >
                 Master Any Exam with{" "}
                 <motion.span
                   className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent"
-                  animate={shouldReduceMotion ? {} : {
-                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                  }}
+                  animate={
+                    shouldReduceMotion
+                      ? {}
+                      : {
+                          backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                        }
+                  }
                   transition={{
                     duration: 4,
                     repeat: Infinity,
@@ -507,9 +556,9 @@ export default function Home() {
                 className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-400 mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-4"
                 initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ 
-                  duration: shouldReduceMotion ? 0.3 : 0.8, 
-                  delay: shouldReduceMotion ? 0 : 0.4 
+                transition={{
+                  duration: shouldReduceMotion ? 0.3 : 0.8,
+                  delay: shouldReduceMotion ? 0 : 0.4,
                 }}
               >
                 Transform your study materials into personalized quizzes,
@@ -521,9 +570,9 @@ export default function Home() {
                 className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center mb-8 md:mb-12 px-4"
                 initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ 
-                  duration: shouldReduceMotion ? 0.3 : 0.8, 
-                  delay: shouldReduceMotion ? 0 : 0.6 
+                transition={{
+                  duration: shouldReduceMotion ? 0.3 : 0.8,
+                  delay: shouldReduceMotion ? 0 : 0.6,
                 }}
               >
                 <motion.div
@@ -560,7 +609,10 @@ export default function Home() {
                     variant="outline"
                     className="w-full sm:w-auto !border-2 !border-gray-600 !text-gray-300 !bg-transparent hover:!bg-gray-700 hover:!text-white text-base md:text-lg px-6 md:px-8 py-3 md:py-4 rounded-full backdrop-blur-sm !transition-all !duration-300"
                   >
-                    <Link href="#demo" className="flex items-center justify-center space-x-2">
+                    <Link
+                      href="#demo"
+                      className="flex items-center justify-center space-x-2"
+                    >
                       <span>Watch Demo</span>
                       <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
                     </Link>
@@ -573,28 +625,34 @@ export default function Home() {
                 className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8 max-w-2xl mx-auto px-4"
                 initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ 
-                  duration: shouldReduceMotion ? 0.3 : 0.8, 
-                  delay: shouldReduceMotion ? 0 : 0.8 
+                transition={{
+                  duration: shouldReduceMotion ? 0.3 : 0.8,
+                  delay: shouldReduceMotion ? 0 : 0.8,
                 }}
               >
                 <div className="text-center">
                   <div className="text-2xl md:text-4xl font-bold text-purple-400 mb-1 md:mb-2">
                     <AnimatedCounter value={50000} />+
                   </div>
-                  <div className="text-gray-300 text-sm md:text-base">Students Helped</div>
+                  <div className="text-gray-300 text-sm md:text-base">
+                    Students Helped
+                  </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl md:text-4xl font-bold text-pink-400 mb-1 md:mb-2">
                     <AnimatedCounter value={94} />%
                   </div>
-                  <div className="text-gray-300 text-sm md:text-base">Success Rate</div>
+                  <div className="text-gray-300 text-sm md:text-base">
+                    Success Rate
+                  </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl md:text-4xl font-bold text-blue-400 mb-1 md:mb-2">
                     <AnimatedCounter value={1000} />+
                   </div>
-                  <div className="text-gray-300 text-sm md:text-base">Exams Covered</div>
+                  <div className="text-gray-300 text-sm md:text-base">
+                    Exams Covered
+                  </div>
                 </div>
               </motion.div>
             </motion.div>
@@ -618,7 +676,10 @@ export default function Home() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="pt-12 md:pt-20 pb-12 md:pb-20 px-4 md:px-6 scroll-mt-24">
+        <section
+          id="features"
+          className="pt-12 md:pt-20 pb-12 md:pb-20 px-4 md:px-6 scroll-mt-24"
+        >
           <div className="max-w-7xl mx-auto">
             <motion.div
               className="text-center mb-12 md:mb-16"
@@ -727,19 +788,23 @@ export default function Home() {
                   key={index}
                   initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ 
-                    duration: shouldReduceMotion ? 0.3 : 0.6, 
-                    delay: shouldReduceMotion ? 0 : index * 0.2 
+                  transition={{
+                    duration: shouldReduceMotion ? 0.3 : 0.6,
+                    delay: shouldReduceMotion ? 0 : index * 0.2,
                   }}
                   className="text-center group"
                 >
                   <div className="relative mb-6 md:mb-8">
                     <motion.div
                       className="w-16 h-16 md:w-20 md:h-20 mx-auto bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl md:rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"
-                      whileHover={shouldReduceMotion ? {} : { 
-                        rotate: 360,
-                        transition: { duration: 0.6 }
-                      }}
+                      whileHover={
+                        shouldReduceMotion
+                          ? {}
+                          : {
+                              rotate: 360,
+                              transition: { duration: 0.6 },
+                            }
+                      }
                     >
                       <item.icon className="w-8 h-8 md:w-10 md:h-10 text-purple-400" />
                     </motion.div>
@@ -760,7 +825,10 @@ export default function Home() {
         </section>
 
         {/* Testimonials Section */}
-        <section id="testimonials" className="pt-12 md:pt-20 pb-12 md:pb-20 px-4 md:px-6 scroll-mt-24">
+        <section
+          id="testimonials"
+          className="pt-12 md:pt-20 pb-12 md:pb-20 px-4 md:px-6 scroll-mt-24"
+        >
           <div className="max-w-7xl mx-auto">
             <motion.div
               className="text-center mb-12 md:mb-16"
@@ -806,7 +874,7 @@ export default function Home() {
           </div>
         </section>
 
-      {/* CTA Section */}
+        {/* CTA Section */}
         <section className="py-12 md:py-20 px-4 md:px-6">
           <div className="max-w-4xl mx-auto text-center">
             <motion.div
@@ -933,7 +1001,7 @@ export default function Home() {
             </div>
           </div>
         </footer>
-        </div>
+      </div>
     </div>
   );
 }
