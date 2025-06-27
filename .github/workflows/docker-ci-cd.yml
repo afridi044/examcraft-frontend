@@ -2,9 +2,9 @@ name: Docker CI/CD Pipeline
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   build-and-push:
@@ -21,33 +21,46 @@ jobs:
           echo "NODE_ENV=development" > .env.docker
           echo "NEXT_TELEMETRY_DISABLED=1" >> .env.docker
           # Add other necessary environment variables here
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      
+
       - name: Install Docker Compose
         run: |
           sudo apt-get update
           sudo apt-get install -y docker-compose
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Build with docker-compose
+
+      - name: Build with docker-compose (no cache)
         run: |
-          docker-compose build
+          # Remove any existing images to ensure fresh build
+          docker-compose down --volumes --remove-orphans || true
+          docker system prune -f || true
+          # Build with no cache to ensure latest source code is used
+          docker-compose build --no-cache --force-rm
 
       - name: Check Docker images
         run: |
           docker images
-      
+
       - name: Tag and push to Docker Hub
         run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="examcraft-v2-${COMMIT_SHA}-${TIMESTAMP}"
+
+          docker tag examcraft-frontend_examcraft-frontend:latest sajidnoor5051/sajid_private_repo:${IMAGE_TAG}
           docker tag examcraft-frontend_examcraft-frontend:latest sajidnoor5051/sajid_private_repo:examcraft-v2
+
+          docker push sajidnoor5051/sajid_private_repo:${IMAGE_TAG}
           docker push sajidnoor5051/sajid_private_repo:examcraft-v2
+
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
   deploy:
     needs: build-and-push
@@ -63,12 +76,18 @@ jobs:
             cd examcraft
             # Login to Docker Hub
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            # Pull the latest image
+
+            # FIXED: Force pull latest image and clear cache
             docker pull sajidnoor5051/sajid_private_repo:examcraft-v2
-            # Stop and remove existing container
+
+            # Stop and remove existing container with force
             docker stop examcraft || true
             docker rm examcraft || true
-            # Run new container
+
+            # FIXED: Remove old images to prevent caching issues
+            docker image prune -f || true
+
+            # Run new container with fresh image
             docker run -d \
               --name examcraft \
               -p 80:3000 \
@@ -77,5 +96,12 @@ jobs:
               --dns 8.8.4.4 \
               --env-file .env.production \
               sajidnoor5051/sajid_private_repo:examcraft-v2
+              
+            # Wait for container to start
+            sleep 10
+
+            # Check if container is running
+            docker ps | grep examcraft || echo "Container failed to start"
+
             # Logout for security
             docker logout
