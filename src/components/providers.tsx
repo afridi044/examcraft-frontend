@@ -1,17 +1,8 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, lazy, Suspense, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Toaster } from "react-hot-toast";
-
-// Dynamically import devtools only in development - optimized
-const ReactQueryDevtools = lazy(() =>
-  process.env.NODE_ENV === "development"
-    ? import("@tanstack/react-query-devtools").then((d) => ({
-        default: d.ReactQueryDevtools,
-      }))
-    : Promise.resolve({ default: () => null })
-);
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   // Create a new QueryClient instance for each component tree
@@ -21,22 +12,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Optimized for performance - balance between fresh data and performance
-            staleTime: 2 * 60 * 1000, // 2 minutes - reasonable balance
-            gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-            refetchOnWindowFocus: false, // Disabled for better performance
-            refetchOnMount: true, // IMPORTANT: Enable initial data fetching
-            retry: (failureCount, error) => {
-              // Don't retry on 4xx errors
-              if (error && typeof error === "object" && "status" in error) {
-                const status = error.status as number;
-                if (status >= 400 && status < 500) {
-                  return false;
-                }
-              }
-              // Retry up to 2 times for other errors (reduced from 3)
-              return failureCount < 2;
-            },
+            // Optimized for development performance
+            staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time for dev
+            gcTime: 15 * 60 * 1000, // 15 minutes - longer cache for dev
+            refetchOnWindowFocus: false, // Disabled for better dev performance
+            refetchOnMount: false, // Disabled for faster development
+            refetchOnReconnect: false, // Disabled for dev
+            retry: false, // Disabled for faster development
           },
           mutations: {
             retry: false, // Don't retry mutations by default
@@ -74,12 +56,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       {children}
       <Toaster position="top-right" toastOptions={toastOptions} />
-      {/* Only show devtools in development */}
-      {process.env.NODE_ENV === "development" && (
-        <Suspense fallback={null}>
-          <ReactQueryDevtools initialIsOpen={false} />
-        </Suspense>
-      )}
+      {/* React Query Devtools disabled for faster development */}
     </QueryClientProvider>
   );
 }

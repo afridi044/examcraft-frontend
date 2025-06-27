@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev --turbopack --port 3000",
+    "dev:fast": "NEXT_TELEMETRY_DISABLED=1 GENERATE_SOURCEMAP=false next dev --turbopack --port 3000",
+    "dev:regular": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
