@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
@@ -36,7 +36,7 @@ interface FlashcardGenerationForm {
   additional_instructions: string;
 }
 
-export default function CreateFlashcardPage() {
+function CreateFlashcardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
@@ -603,5 +603,31 @@ export default function CreateFlashcardPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function CreateFlashcardPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="relative">
+                <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+              </div>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+                Loading...
+              </h2>
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <CreateFlashcardPageContent />
+    </Suspense>
   );
 }

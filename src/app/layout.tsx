@@ -20,12 +20,11 @@ export const metadata: Metadata = {
   keywords:
     "exam preparation, AI quizzes, mock exams, flashcards, study analytics, learning platform",
   authors: [{ name: "ExamCraft Team" }],
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -36,10 +35,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Critical viewport meta tag for mobile responsiveness */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
+        {/* Preload critical resources for faster loading */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -48,8 +49,6 @@ export default function RootLayout({
         />
         <link rel="dns-prefetch" href="https://supabase.com" />
         <meta name="theme-color" content="#1f2937" />
-        <meta name="format-detection" content="telephone=no" />
-        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

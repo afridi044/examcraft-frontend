@@ -6,7 +6,6 @@
 # - Security best practices (non-root user)
 # - Layer caching optimization
 # - Next.js standalone output for reduced dependencies
-# - Proper CSS handling for mobile responsiveness
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -49,21 +48,15 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy source code
 COPY . .
 
-# Set build-time environment variables for proper CSS processing
+# Set build-time environment variables
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=production \
-    TAILWIND_MODE=build \
-    NODE_OPTIONS="--max-old-space-size=4096"
+    NODE_ENV=production
 
 # Install all dependencies (including devDependencies for build)
 RUN npm ci --frozen-lockfile
 
-# Generate Tailwind CSS and build the Next.js application
-# Ensure CSS is properly processed for all responsive breakpoints
+# Build the Next.js application
 RUN npm run build
-
-# Verify that the build includes CSS files
-RUN ls -la .next/static/css/
 
 # -----------------------------------------------------------------------------
 # Stage 4: Production runtime
