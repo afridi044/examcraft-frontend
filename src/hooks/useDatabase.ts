@@ -28,7 +28,7 @@ export const QUERY_KEYS = {
   user: (id: string) => ["user", id] as const,
 
   // Topics
-  topics: ["topics"] as const,
+  topics: () => ["topics"] as const,
   topic: (id: string) => ["topic", id] as const,
   topicsWithProgress: (userId: string) =>
     ["topics", "progress", userId] as const,
@@ -121,7 +121,7 @@ export function useUpdateUser() {
 
 export function useTopics() {
   return useQuery({
-    queryKey: QUERY_KEYS.topics,
+    queryKey: QUERY_KEYS.topics(),
     queryFn: () => db.topics.getAllTopics(),
     select: (response) => response.data || [],
     staleTime: 15 * 60 * 1000, // 15 minutes - topics change rarely
@@ -153,7 +153,7 @@ export function useCreateTopic() {
     mutationFn: (data: CreateTopicInput) => db.topics.createTopic(data),
     onSuccess: (response) => {
       if (response.success) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.topics });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.topics() });
       }
     },
   });
