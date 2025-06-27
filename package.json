@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:css": "tailwindcss -i ./src/app/globals.css -o ./public/styles.css --watch=false",
+    "build:production": "npm run build:css && next build",
     "start": "next start",
     "lint": "next lint",
     "docker:build": "./scripts/docker-build.sh",

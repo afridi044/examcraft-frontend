@@ -52,10 +52,10 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
   // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/');
+      router.push("/");
     }
   }, [loading, user, router]);
-  
+
   const queryClient = useQueryClient();
 
   const [topicId, setTopicId] = useState<string>("");
@@ -302,9 +302,12 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
 
   // OPTIMIZED: Simplified loading state
   // Improved loading logic - don't show loading state when user is signing out
-  const isMainLoading = loading || (loading === false && user && userLoading) || (loading === false && user && !currentUser);
+  const isMainLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
   const isDataLoading = isLoading;
-  
+
   // Show full loading screen for both auth and initial data load, but not during sign out
   const showFullLoadingScreen = isMainLoading || isDataLoading;
 
@@ -322,9 +325,7 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               Loading Study Session...
             </h2>
-            <p className="text-gray-400">
-              Preparing your flashcards for study
-            </p>
+            <p className="text-gray-400">Preparing your flashcards for study</p>
           </div>
         </div>
       </DashboardLayout>
@@ -597,7 +598,9 @@ export default function StudySessionPage({ params }: StudySessionPageProps) {
                       <span className="text-base sm:text-lg font-semibold block mb-1">
                         Don&apos;t Know
                       </span>
-                      <p className="text-xs sm:text-sm opacity-80">Need more practice</p>
+                      <p className="text-xs sm:text-sm opacity-80">
+                        Need more practice
+                      </p>
                     </div>
                   </motion.button>
 
