@@ -8,19 +8,34 @@ export function useAuth() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session - only once, with minimal delay for faster page loads
+    // Get initial session - only once, optimized for speed
     const initializeAuth = async () => {
       try {
-        // Small delay to let the page render first
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
+        // Use getSession instead of getUser for faster initial load
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
+
+        // Handle refresh token errors
+        if (
+          error &&
+          (error.message.includes("refresh") || error.message.includes("JWT"))
+        ) {
+          console.warn("Session error, clearing:", error.message);
+          await supabase.auth.signOut();
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+            setInitialized(true);
+          }
+          return;
+        }
 
         if (isMounted) {
           setUser(session?.user ?? null);
@@ -29,6 +44,12 @@ export function useAuth() {
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
+        // Clear potentially corrupted session
+        try {
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          console.error("Error clearing session:", signOutError);
+        }
         if (isMounted) {
           setUser(null);
           setLoading(false);
@@ -42,13 +63,41 @@ export function useAuth() {
       initializeAuth();
     }
 
-    // Listen for auth changes - but keep it simple
+    // Listen for auth changes - optimized for performance
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (isMounted) {
-        setUser(session?.user ?? null);
-        setLoading(false);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      // Handle different auth events efficiently
+      switch (event) {
+        case "TOKEN_REFRESHED":
+          if (!session) {
+            console.warn("Token refresh failed, signing out");
+            await supabase.auth.signOut();
+            setUser(null);
+            setLoading(false);
+          } else {
+            setUser(session.user);
+            setLoading(false);
+          }
+          break;
+
+        case "SIGNED_OUT":
+          setUser(null);
+          setLoading(false);
+          setSigningOut(false);
+          break;
+
+        case "SIGNED_IN":
+          setUser(session?.user ?? null);
+          setLoading(false);
+          break;
+
+        default:
+          setUser(session?.user ?? null);
+          setLoading(false);
+          break;
       }
     });
 
@@ -108,7 +157,8 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      setLoading(true);
+      // Set signing out state to prevent loading screen
+      setSigningOut(true);
       const { error } = await supabase.auth.signOut();
 
       if (error) throw error;
@@ -117,18 +167,47 @@ export function useAuth() {
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Sign out failed";
+      setSigningOut(false);
       return { error: errorMessage };
-    } finally {
+    }
+  };
+
+  // Helper function to clear corrupted auth state
+  const clearAuthState = async () => {
+    try {
+      // Clear localStorage auth data
+      if (typeof window !== "undefined") {
+        const keys = Object.keys(localStorage);
+        keys.forEach((key) => {
+          if (key.startsWith("sb-") || key.includes("supabase")) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+
+      // Reset state
+      setUser(null);
       setLoading(false);
+
+      return { error: null };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to clear auth state";
+      return { error: errorMessage };
     }
   };
 
   return {
     user,
     loading,
+    signingOut,
     signUp,
     signIn,
     signOut,
+    clearAuthState, // Export the helper function
     isAuthenticated: !!user,
   };
 }

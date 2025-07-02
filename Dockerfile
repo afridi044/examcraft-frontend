@@ -45,12 +45,12 @@ FROM base AS builder
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy source code
-COPY . .
-
 # Set build-time environment variables
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
+
+# Copy source code
+COPY . .
 
 # Install all dependencies (including devDependencies for build)
 RUN npm ci --frozen-lockfile

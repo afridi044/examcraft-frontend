@@ -33,8 +33,11 @@ export function TopNavbar() {
           </span>
         </Link>
 
-        {/* Search Bar */}
-        <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-8">
+        {/* Search Bar - Hidden on mobile */}
+        <form
+          onSubmit={handleSearch}
+          className="hidden md:flex flex-1 max-w-2xl mx-8"
+        >
           <div className="relative">
             <Input
               type="search"
@@ -48,14 +51,26 @@ export function TopNavbar() {
         </form>
 
         {/* Right Side Actions */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-4">
+          {/* Search icon for mobile */}
           <Button
             variant="ghost"
             size="sm"
-            className="text-gray-400 hover:text-white hover:bg-gray-800/50"
+            className="md:hidden text-gray-400 hover:text-white hover:bg-gray-800/50"
+            onClick={() => {
+              /* Add mobile search modal logic */
+            }}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:flex text-gray-400 hover:text-white hover:bg-gray-800/50"
           >
             <Crown className="h-4 w-4 mr-2" />
-            Upgrade
+            <span className="hidden lg:inline">Upgrade</span>
           </Button>
           <Button
             variant="ghost"
@@ -63,10 +78,12 @@ export function TopNavbar() {
             className="text-gray-400 hover:text-white hover:bg-gray-800/50"
           >
             <User className="h-4 w-4 mr-2" />
-            {user?.email?.split("@")[0]}
+            <span className="hidden sm:inline">
+              {user?.email?.split("@")[0]}
+            </span>
           </Button>
         </div>
       </div>
     </div>
   );
-} 
+}

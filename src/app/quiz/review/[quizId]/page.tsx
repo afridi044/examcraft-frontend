@@ -20,7 +20,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { useCurrentUser } from "@/hooks/useDatabase";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  useCurrentUser,
+  useQuizReview,
+  usePrefetchQuizPages,
+} from "@/hooks/useDatabase";
 import toast from "react-hot-toast";
 
 interface ReviewData {
@@ -64,42 +69,31 @@ interface ReviewData {
 export default function QuizReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: currentUser } = useCurrentUser();
-  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const [flashcardStates, setFlashcardStates] = useState<
     Record<string, "idle" | "creating" | "created" | "exists">
   >({});
+  const { prefetchQuizTake } = usePrefetchQuizPages();
 
   const quizId = params.quizId as string;
 
+  // OPTIMIZED: Use React Query hook instead of manual fetch
+  const {
+    data: reviewData,
+    isLoading: loading,
+    error: reviewError,
+  } = useQuizReview(quizId, currentUser?.user_id || "");
+
+  // Convert query error to string for consistency
+  const error = reviewError?.message || null;
+
+  // FIXED: Redirect to landing page if not authenticated and not loading
   useEffect(() => {
-    if (currentUser && quizId) {
-      fetchReviewData();
+    if (!authLoading && !user) {
+      router.push("/");
     }
-  }, [currentUser, quizId]);
-
-  // OPTIMIZED: Cleaner data fetching with useCallback
-  const fetchReviewData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const url = `/api/quiz/review/${quizId}?userId=${currentUser?.user_id}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch review data: ${response.status}`);
-      }
-
-      const data: ReviewData = await response.json();
-      setReviewData(data);
-    } catch {
-      setError("Failed to load quiz review");
-      toast.error("Failed to load quiz review");
-    } finally {
-      setLoading(false);
-    }
-  }, [quizId, currentUser?.user_id]);
+  }, [authLoading, user]); // Removed router from dependencies to prevent unnecessary re-runs
 
   // OPTIMIZED: Memoized utility functions
   const formatTime = useCallback((seconds: number) => {
@@ -183,13 +177,31 @@ export default function QuizReviewPage() {
     }
   };
 
-  if (loading) {
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading =
+    authLoading ||
+    (authLoading === false && user && userLoading) ||
+    (authLoading === false && user && !currentUser);
+  const isDataLoading = loading;
+
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading quiz review...</p>
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/50">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 to-purple-600/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz Review...
+            </h2>
+            <p className="text-gray-400">Preparing your quiz analysis</p>
           </div>
         </div>
       </DashboardLayout>
@@ -222,27 +234,27 @@ export default function QuizReviewPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto p-20 space-y-8">
+      <div className="max-w-6xl mx-auto p-4 sm:p-8 lg:p-20 space-y-6 sm:space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex items-start space-x-3 sm:space-x-4">
             <Button
               onClick={() => router.push("/dashboard")}
               variant="outline"
               size="icon"
-              className="border-gray-600/50 text-gray-400 hover:border-purple-400 hover:text-purple-400 hover:bg-purple-500/10 transition-all duration-200"
+              className="border-gray-600/50 text-gray-400 hover:border-purple-400 hover:text-purple-400 hover:bg-purple-500/10 transition-all duration-200 flex-shrink-0"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-white">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">
                 Quiz Review: {reviewData.quiz.title}
               </h1>
-              <p className="text-gray-400 text-lg">
+              <p className="text-gray-400 text-sm sm:text-base lg:text-lg">
                 {reviewData.quiz.description || "Review your quiz performance"}
               </p>
               {reviewData.quiz.topic && (
-                <p className="text-sm text-purple-400 mt-1 font-medium">
+                <p className="text-xs sm:text-sm text-purple-400 mt-1 font-medium">
                   Topic: {reviewData.quiz.topic.name}
                 </p>
               )}
@@ -251,57 +263,60 @@ export default function QuizReviewPage() {
           <div className="flex space-x-3">
             <Button
               onClick={() => router.push(`/quiz/take/${quizId}`)}
-              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium px-6 py-2 shadow-lg hover:shadow-purple-500/25 transition-all duration-200"
+              onMouseEnter={() => prefetchQuizTake(quizId)}
+              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium px-4 sm:px-6 py-2 shadow-lg hover:shadow-purple-500/25 transition-all duration-200 text-sm sm:text-base min-h-[44px]"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
-              Retake Quiz
+              <span className="hidden sm:inline">Retake</span> Quiz
             </Button>
           </div>
         </div>
 
         {/* Performance Summary */}
-        <Card className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-gray-700/50 p-8 shadow-xl">
-          <div className="flex items-center space-x-3 mb-6">
-            <Trophy className="h-6 w-6 text-yellow-500" />
-            <h2 className="text-xl font-bold text-white">
+        <Card className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-gray-700/50 p-4 sm:p-6 lg:p-8 shadow-xl">
+          <div className="flex items-center space-x-3 mb-4 sm:mb-6">
+            <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-white">
               Performance Summary
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-400 mb-2">
+              <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-2">
                 {reviewData.quiz_stats.percentage}%
               </div>
-              <div className="text-gray-400">Overall Score</div>
+              <div className="text-gray-400 text-sm">Overall Score</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400 mb-2">
+              <div className="text-2xl sm:text-3xl font-bold text-blue-400 mb-2">
                 {reviewData.quiz_stats.correct_answers}/
                 {reviewData.quiz_stats.total_questions}
               </div>
-              <div className="text-gray-400">Correct Answers</div>
+              <div className="text-gray-400 text-sm">Correct Answers</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-400 mb-2">
+              <div className="text-2xl sm:text-3xl font-bold text-purple-400 mb-2">
                 {reviewData.questions.length}
               </div>
-              <div className="text-gray-400">Total Questions</div>
+              <div className="text-gray-400 text-sm">Total Questions</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-orange-400 mb-2">
+              <div className="text-2xl sm:text-3xl font-bold text-orange-400 mb-2">
                 {formatTime(reviewData.quiz_stats.total_time)}
               </div>
-              <div className="text-gray-400">Total Time</div>
+              <div className="text-gray-400 text-sm">Total Time</div>
             </div>
           </div>
         </Card>
 
         {/* Questions Review */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <div className="flex items-center space-x-3">
-            <BookOpen className="h-6 w-6 text-blue-500" />
-            <h2 className="text-xl font-bold text-white">Question Review</h2>
+            <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-white">
+              Question Review
+            </h2>
           </div>
 
           {reviewData.questions.map((question, index) => {
@@ -317,20 +332,20 @@ export default function QuizReviewPage() {
                   duration: 0.3,
                 }}
               >
-                <Card className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 border-gray-700/50 p-6 shadow-lg hover:shadow-xl transition-all duration-300">
+                <Card className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 border-gray-700/50 p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300">
                   {/* Question Header */}
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                         <span className="text-white font-bold text-sm">
                           {index + 1}
                         </span>
                       </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-white">
                           Question {index + 1}
                         </h3>
-                        <div className="flex items-center space-x-4 text-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 text-xs sm:text-sm space-y-1 sm:space-y-0">
                           <span
                             className={`${getDifficultyColor(question.difficulty)}`}
                           >
@@ -348,7 +363,7 @@ export default function QuizReviewPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
                       {/* Flashcard Generation Button */}
                       <Button
                         size="sm"
@@ -357,7 +372,7 @@ export default function QuizReviewPage() {
                           flashcardStates[question.question_id] === "creating"
                         }
                         className={`
-                          relative overflow-hidden transition-all duration-300 font-medium
+                          relative overflow-hidden transition-all duration-300 font-medium text-xs sm:text-sm px-2 sm:px-3
                           ${
                             flashcardStates[question.question_id] === "created"
                               ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/25 border-0"
@@ -378,15 +393,15 @@ export default function QuizReviewPage() {
                               : "Create flashcard from this question"
                         }
                       >
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 sm:space-x-2">
                           {flashcardStates[question.question_id] ===
                           "creating" ? (
-                            <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                            <div className="animate-spin h-3 w-3 sm:h-4 sm:w-4 border-2 border-white/30 border-t-white rounded-full" />
                           ) : flashcardStates[question.question_id] ===
                             "created" ? (
-                            <Check className="h-4 w-4" />
+                            <Check className="h-3 w-3 sm:h-4 sm:w-4" />
                           ) : (
-                            <CreditCard className="h-4 w-4" />
+                            <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
                           )}
                           <span className="hidden sm:inline">
                             {flashcardStates[question.question_id] === "created"
@@ -496,8 +511,8 @@ export default function QuizReviewPage() {
                   {question.explanation && (
                     <div className="border-t border-gray-700/50 pt-4">
                       <div className="flex items-center space-x-2 mb-3">
-                        <Lightbulb className="h-5 w-5 text-yellow-500" />
-                        <h4 className="text-lg font-semibold text-white">
+                        <Lightbulb className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
+                        <h4 className="text-base sm:text-lg font-semibold text-white">
                           Explanation
                         </h4>
                         {question.explanation.ai_generated && (
@@ -507,7 +522,7 @@ export default function QuizReviewPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-300 leading-relaxed bg-gray-700/30 p-4 rounded-lg">
+                      <p className="text-gray-300 leading-relaxed bg-gray-700/30 p-3 sm:p-4 rounded-lg text-sm sm:text-base">
                         {question.explanation.content}
                       </p>
                     </div>
@@ -519,10 +534,10 @@ export default function QuizReviewPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-12">
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 pt-8 sm:pt-12">
           <Button
             onClick={() => router.push("/dashboard")}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium px-8 py-3 shadow-lg hover:shadow-purple-500/25 transition-all duration-200 w-full sm:w-auto"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium px-6 sm:px-8 py-3 shadow-lg hover:shadow-purple-500/25 transition-all duration-200 w-full sm:w-auto min-h-[48px]"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Return to Dashboard
@@ -530,14 +545,14 @@ export default function QuizReviewPage() {
           <Button
             onClick={() => router.push("/quiz/create")}
             variant="outline"
-            className="border-gray-600/50 text-gray-300 hover:border-blue-400 hover:text-blue-400 hover:bg-blue-500/10 font-medium px-8 py-3 transition-all duration-200 w-full sm:w-auto"
+            className="border-gray-600/50 text-gray-300 hover:border-blue-400 hover:text-blue-400 hover:bg-blue-500/10 font-medium px-6 sm:px-8 py-3 transition-all duration-200 w-full sm:w-auto min-h-[48px]"
           >
             <BookOpen className="h-4 w-4 mr-2" />
             Create New Quiz
           </Button>
           <Button
             onClick={() => router.push(`/quiz/take/${quizId}`)}
-            className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-medium px-8 py-3 shadow-lg hover:shadow-blue-500/25 transition-all duration-200 w-full sm:w-auto"
+            className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-medium px-6 sm:px-8 py-3 shadow-lg hover:shadow-blue-500/25 transition-all duration-200 w-full sm:w-auto min-h-[48px]"
           >
             <RotateCcw className="h-4 w-4 mr-2" />
             Retake Quiz

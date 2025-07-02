@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Brain,
@@ -11,13 +11,13 @@ import {
   Zap,
   Users,
   Layers,
-  Settings,
   Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import {
   useCurrentUser,
@@ -25,9 +25,6 @@ import {
   useInvalidateUserData,
 } from "@/hooks/useDatabase";
 import { toast } from "react-hot-toast";
-import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardStats, RecentActivity } from "@/types/database";
 
 interface FlashcardGenerationForm {
   topic_id: string;
@@ -39,14 +36,15 @@ interface FlashcardGenerationForm {
   additional_instructions: string;
 }
 
-export default function CreateFlashcardPage() {
+function CreateFlashcardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: currentUser } = useCurrentUser();
-  const { data: topics } = useTopics();
+  const { user, loading } = useAuth();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const { data: topics, isLoading: topicsLoading } = useTopics();
   const invalidateUserData = useInvalidateUserData();
-  const queryClient = useQueryClient();
 
+  // State management
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedFlashcards, setGeneratedFlashcards] = useState<{
     topic_id: string;
@@ -69,34 +67,15 @@ export default function CreateFlashcardPage() {
 
   const [numFlashcardsInput, setNumFlashcardsInput] = useState("10");
 
-  const difficultyLevels = [
-    { value: 1, label: "Beginner", color: "text-green-400" },
-    { value: 2, label: "Easy", color: "text-blue-400" },
-    { value: 3, label: "Medium", color: "text-yellow-400" },
-    { value: 4, label: "Hard", color: "text-orange-400" },
-    { value: 5, label: "Expert", color: "text-red-400" },
-  ];
+  // Optimized form handlers with useCallback
+  const handleInputChange = useCallback(
+    (field: keyof FlashcardGenerationForm, value: string | number) => {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
-  // Set initial topic name if preselected topic exists
-  useEffect(() => {
-    if (preselectedTopicId && topics && topics.length > 0) {
-      const selectedTopic = topics.find(
-        (t) => t.topic_id === preselectedTopicId
-      );
-      if (selectedTopic) {
-        setForm((prev) => ({ ...prev, topic_name: selectedTopic.name }));
-      }
-    }
-  }, [preselectedTopicId, topics]);
-
-  const handleInputChange = (
-    field: keyof FlashcardGenerationForm,
-    value: string | number
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const topicName = form.topic_id
       ? topics?.find((t) => t.topic_id === form.topic_id)?.name
       : form.custom_topic.trim();
@@ -110,9 +89,9 @@ export default function CreateFlashcardPage() {
       return false;
     }
     return true;
-  };
+  }, [form.topic_id, form.custom_topic, form.num_flashcards, topics]);
 
-  const handleGenerateFlashcards = async () => {
+  const handleGenerateFlashcards = useCallback(async () => {
     if (!validateForm() || !currentUser) return;
 
     setIsGenerating(true);
@@ -155,46 +134,8 @@ export default function CreateFlashcardPage() {
         );
       }
 
-      // Immediately update cache with optimistic data for instant UI updates
+      // Simplified cache invalidation - just invalidate user data
       if (currentUser?.user_id) {
-        console.log("Flashcards created: Updating cache optimistically", {
-          userId: currentUser.user_id,
-        });
-
-        // Update dashboard stats immediately
-        queryClient.setQueryData(
-          ["dashboardStats", currentUser.user_id],
-          (oldData: DashboardStats | undefined) => {
-            if (oldData) {
-              return {
-                ...oldData,
-                totalFlashcards:
-                  (oldData.totalFlashcards || 0) + data.generated_count,
-              };
-            }
-            return oldData;
-          }
-        );
-
-        // Update recent activity immediately
-        queryClient.setQueryData(
-          ["recentActivity", currentUser.user_id],
-          (oldData: RecentActivity[] | undefined) => {
-            if (oldData) {
-              const newActivity: RecentActivity = {
-                id: `temp-${Date.now()}`,
-                type: "flashcard",
-                title: `Created ${data.generated_count} flashcards: ${data.topic_name}`,
-                completed_at: new Date().toISOString(),
-                topic: data.topic_name,
-              };
-              return [newActivity, ...oldData.slice(0, 9)]; // Keep only 10 items
-            }
-            return oldData;
-          }
-        );
-
-        // Also invalidate for background refresh to ensure data consistency
         invalidateUserData(currentUser.user_id);
       }
 
@@ -211,42 +152,104 @@ export default function CreateFlashcardPage() {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [validateForm, currentUser, topics, form, invalidateUserData]);
+
+  // FIXED: Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/");
+    }
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
+
+  // Set initial topic name if preselected topic exists
+  useEffect(() => {
+    if (preselectedTopicId && topics && topics.length > 0) {
+      const selectedTopic = topics.find(
+        (t) => t.topic_id === preselectedTopicId
+      );
+      if (selectedTopic) {
+        setForm((prev) => ({ ...prev, topic_name: selectedTopic.name }));
+      }
+    }
+  }, [preselectedTopicId, topics]);
+
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+
+  // OPTIMIZED: Memoize loading states to prevent unnecessary recalculations
+  const { isAuthLoading, isDataLoading, showLoadingScreen } = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
+
+    return {
+      isAuthLoading: authLoading,
+      isDataLoading: dataLoading,
+      showLoadingScreen: authLoading || dataLoading,
+    };
+  }, [loading, user, userLoading, currentUser, topicsLoading, topics]);
+
+  if (showLoadingScreen) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Flashcard Creator...
+            </h2>
+            <p className="text-gray-400">Preparing your learning tools</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const difficultyLevels = [
+    { value: 1, label: "Beginner", color: "text-green-400" },
+    { value: 2, label: "Easy", color: "text-blue-400" },
+    { value: 3, label: "Medium", color: "text-yellow-400" },
+    { value: 4, label: "Hard", color: "text-orange-400" },
+    { value: 5, label: "Expert", color: "text-red-400" },
+  ];
 
   // Show success screen if flashcards were generated
   if (generatedFlashcards) {
     return (
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto p-20 space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8"
-          >
+        <div className="max-w-4xl mx-auto p-4 sm:p-8 lg:p-20 space-y-6 sm:space-y-8">
+          <div className="text-center space-y-6 sm:space-y-8">
             {/* Success Header */}
             <div className="space-y-4">
               <div className="flex items-center justify-center space-x-3">
-                <div className="h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
-                  <Sparkles className="h-8 w-8 text-white" />
+                <div className="h-12 w-12 sm:h-16 sm:w-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
+                  <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
               </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent px-4">
                 Flashcards Generated Successfully!
               </h1>
-              <p className="text-gray-400 max-w-2xl mx-auto">
+              <p className="text-gray-400 max-w-2xl mx-auto px-4 text-sm sm:text-base">
                 Your AI-powered flashcards have been created and are ready for
                 study.
               </p>
             </div>
 
             {/* Flashcard Details Card */}
-            <Card className="bg-gray-800/50 border-gray-700/50 p-8 max-w-2xl mx-auto">
-              <div className="space-y-6">
+            <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="text-center space-y-3">
-                  <h2 className="text-2xl font-bold text-white">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">
                     {generatedFlashcards.topic_name}
                   </h2>
-                  <div className="flex items-center justify-center space-x-6 text-gray-400">
+                  <div className="flex items-center justify-center space-x-4 sm:space-x-6 text-gray-400 text-sm sm:text-base">
                     <div className="flex items-center space-x-2">
                       <Layers className="h-4 w-4" />
                       <span>
@@ -264,13 +267,13 @@ export default function CreateFlashcardPage() {
                 <div className="space-y-4">
                   <Button
                     onClick={() => router.push("/flashcards")}
-                    className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 text-lg"
+                    className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 text-base sm:text-lg min-h-[44px]"
                   >
                     <Zap className="h-5 w-5 mr-2" />
                     Start Studying Now
                   </Button>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Button
                       onClick={() => {
                         if (currentUser?.user_id) {
@@ -279,10 +282,11 @@ export default function CreateFlashcardPage() {
                         router.push("/dashboard");
                       }}
                       variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[44px]"
                     >
                       <Users className="h-4 w-4 mr-2" />
-                      Return to Dashboard
+                      <span className="hidden sm:inline">Return to</span>{" "}
+                      Dashboard
                     </Button>
 
                     <Button
@@ -300,16 +304,17 @@ export default function CreateFlashcardPage() {
                         setNumFlashcardsInput("10");
                       }}
                       variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[44px]"
                     >
                       <Layers className="h-4 w-4 mr-2" />
-                      Create More Flashcards
+                      <span className="hidden sm:inline">Create</span> More
+                      <span className="hidden sm:inline"> Flashcards</span>
                     </Button>
                   </div>
                 </div>
               </div>
             </Card>
-          </motion.div>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -317,43 +322,35 @@ export default function CreateFlashcardPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-20 space-y-8">
+      <div className="max-w-5xl mx-auto p-4 sm:p-8 lg:p-20 space-y-6 sm:space-y-8">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4"
-        >
+        <div className="text-center space-y-4">
           <div className="flex items-center justify-center space-x-3">
-            <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Layers className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-blue-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <Layers className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
               AI Flashcard Generator
             </h1>
           </div>
-          <p className="text-gray-400 max-w-2xl mx-auto">
+          <p className="text-gray-400 max-w-2xl mx-auto px-4 text-sm sm:text-base">
             Create personalized flashcards with AI. Provide your topic and
             content, and our AI will generate effective study materials
             optimized for active recall.
           </p>
-        </motion.div>
+        </div>
 
         {/* Main Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card className="bg-gray-800/50 border-gray-700/50 p-8">
-            <div className="space-y-8">
+        <div>
+          <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8">
+            <div className="space-y-6 sm:space-y-8">
               {/* Topic Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-6">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center space-x-3 mb-4 sm:mb-6">
                   <div className="h-8 w-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
                     <BookOpen className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Topic Selection
                   </h2>
                 </div>
@@ -361,7 +358,7 @@ export default function CreateFlashcardPage() {
                 {/* Topic Selection */}
                 <div className="space-y-4">
                   <Label className="text-gray-300">Topic</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="topic" className="text-sm text-gray-400">
                         Select from existing topics
@@ -380,7 +377,7 @@ export default function CreateFlashcardPage() {
                             selectedTopic?.name || ""
                           );
                         }}
-                        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white"
+                        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white min-h-[44px]"
                       >
                         <option value="">Choose a topic...</option>
                         {topics?.map((topic) => (
@@ -407,7 +404,7 @@ export default function CreateFlashcardPage() {
                           handleInputChange("topic_name", e.target.value);
                         }}
                         placeholder="e.g., Machine Learning Basics"
-                        className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
+                        className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 min-h-[44px]"
                         disabled={!!form.topic_id}
                       />
                     </div>
@@ -416,28 +413,28 @@ export default function CreateFlashcardPage() {
               </div>
 
               {/* Flashcard Configuration */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-6">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center space-x-3 mb-4 sm:mb-6">
                   <div className="h-8 w-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                    <Settings className="h-4 w-4 text-white" />
+                    <Brain className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Flashcard Configuration
                   </h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Difficulty Level */}
                   <div className="space-y-4">
                     <Label className="text-gray-300">Difficulty Level</Label>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-5 gap-1 sm:gap-2">
                       {difficultyLevels.map((level) => (
                         <button
                           key={level.value}
                           onClick={() =>
                             handleInputChange("difficulty", level.value)
                           }
-                          className={`p-3 rounded-lg border text-center transition-all ${
+                          className={`p-2 sm:p-3 rounded-lg border text-center transition-all min-h-[44px] ${
                             form.difficulty === level.value
                               ? "border-blue-500 bg-blue-500/20 text-blue-300"
                               : "border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500"
@@ -495,19 +492,19 @@ export default function CreateFlashcardPage() {
                           handleInputChange("num_flashcards", clampedValue);
                         }
                       }}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-gray-700/50 border-gray-600 text-white min-h-[44px]"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Content Source */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-6">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center space-x-3 mb-4 sm:mb-6">
                   <div className="h-8 w-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
                     <FileText className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Content & Instructions
                   </h2>
                 </div>
@@ -524,8 +521,8 @@ export default function CreateFlashcardPage() {
                         handleInputChange("content_source", e.target.value)
                       }
                       placeholder="Paste your study material, notes, or content that you want the flashcards to be based on..."
-                      rows={6}
-                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical"
+                      rows={4}
+                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical min-h-[100px]"
                     />
                   </div>
 
@@ -547,23 +544,28 @@ export default function CreateFlashcardPage() {
                       }
                       placeholder="Any specific instructions for the AI (e.g., 'Focus on definitions', 'Include examples', etc.)"
                       rows={3}
-                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical"
+                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical min-h-[80px]"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Generate Button */}
-              <div className="pt-6 border-t border-gray-700">
+              <div className="pt-4 sm:pt-6 border-t border-gray-700">
                 <Button
                   onClick={handleGenerateFlashcards}
-                  disabled={isGenerating}
-                  className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isGenerating || userLoading || !currentUser}
+                  className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] text-base sm:text-lg"
                 >
                   {isGenerating ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span>Generating Flashcards...</span>
+                    </div>
+                  ) : userLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Loading...</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2">
@@ -575,21 +577,19 @@ export default function CreateFlashcardPage() {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Tips Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="bg-gradient-to-r from-teal-500/10 to-blue-500/10 border-teal-500/20 p-6">
+        <div>
+          <Card className="bg-gradient-to-r from-teal-500/10 to-blue-500/10 border-teal-500/20 p-4 sm:p-6">
             <div className="flex items-start space-x-4">
               <div className="h-8 w-8 bg-gradient-to-br from-teal-500 to-blue-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                 <Lightbulb className="h-4 w-4 text-white" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold text-teal-300">Pro Tips</h3>
+                <h3 className="text-base sm:text-lg font-bold text-teal-300">
+                  Pro Tips
+                </h3>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>
                     • Provide detailed content for more accurate flashcards
@@ -605,8 +605,34 @@ export default function CreateFlashcardPage() {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function CreateFlashcardPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="relative">
+                <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+              </div>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+                Loading...
+              </h2>
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <CreateFlashcardPageContent />
+    </Suspense>
   );
 }

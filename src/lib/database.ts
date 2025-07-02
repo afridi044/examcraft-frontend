@@ -39,10 +39,17 @@ import type {
   ApiResponse,
 } from "@/types/database";
 
-// Initialize Supabase client
+// Initialize Supabase client with minimal logging
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    debug: false, // Disable verbose auth logging
+  },
+});
 
 // =============================================
 // Helper Functions
@@ -751,35 +758,11 @@ export const answerService = {
     input: CreateUserAnswerInput
   ): Promise<ApiResponse<UserAnswer>> {
     try {
-      console.log("=== DATABASE SUBMIT ANSWER ===");
-      console.log("Input:", {
-        user_id: input.user_id,
-        question_id: input.question_id,
-        quiz_id: input.quiz_id,
-        is_correct: input.is_correct,
-      });
-
       // Debug: Check what user IDs exist in user_answers table for this quiz
       const { data: allAnswersForQuiz } = await supabase
         .from(TABLE_NAMES.USER_ANSWERS)
         .select("user_id, question_id, quiz_id, created_at")
         .eq("quiz_id", input.quiz_id);
-
-      console.log(
-        "All existing answers for this quiz:",
-        allAnswersForQuiz?.length || 0
-      );
-      if (allAnswersForQuiz && allAnswersForQuiz.length > 0) {
-        const uniqueUserIds = [
-          ...new Set(allAnswersForQuiz.map((a) => a.user_id)),
-        ];
-        console.log("Unique user IDs in this quiz:", uniqueUserIds);
-        console.log("Current user ID:", input.user_id);
-        console.log(
-          "User ID matches existing?",
-          uniqueUserIds.includes(input.user_id)
-        );
-      }
 
       // First, delete any existing answers for this user, question, and quiz combination
       // This handles retakes by removing old answers before inserting new ones
@@ -791,39 +774,18 @@ export const answerService = {
 
       // Add quiz_id filter if it exists (for quiz answers)
       if (input.quiz_id) {
-        console.log("Adding quiz_id filter:", input.quiz_id);
         deleteQuery.eq("quiz_id", input.quiz_id);
       } else {
-        console.log("Quiz ID is null, filtering for null quiz_id");
         deleteQuery.is("quiz_id", null);
       }
 
       const { error: deleteError, count: deletedCount } = await deleteQuery;
 
       if (deleteError) {
-        console.error("Error deleting existing answers:", deleteError);
         // Don't fail the whole operation if delete fails - might be first attempt
-      } else {
-        console.log(`Deleted ${deletedCount || 0} existing answers for retake`);
-      }
-
-      // Debug: Check what existing answers are in the database for this user
-      const { data: existingAnswers } = await supabase
-        .from(TABLE_NAMES.USER_ANSWERS)
-        .select("answer_id, user_id, question_id, quiz_id, created_at")
-        .eq("user_id", input.user_id)
-        .eq("question_id", input.question_id);
-
-      console.log(
-        "Remaining answers after delete:",
-        existingAnswers?.length || 0
-      );
-      if (existingAnswers && existingAnswers.length > 0) {
-        console.log("Sample remaining answers:", existingAnswers.slice(0, 2));
       }
 
       // Insert the new answer
-      console.log("Inserting new answer...");
       const { data, error } = await supabase
         .from(TABLE_NAMES.USER_ANSWERS)
         .insert(input)
@@ -831,11 +793,9 @@ export const answerService = {
         .single();
 
       if (error) {
-        console.error("Insert error:", error);
         return handleError(error);
       }
 
-      console.log("Successfully inserted answer:", data?.answer_id);
       return handleSuccess(data);
     } catch (error) {
       return handleError(error);
@@ -1065,377 +1025,97 @@ export const flashcardService = {
 // =============================================
 
 export const analyticsService = {
-  // Get dashboard statistics
-  // OPTIMIZED Dashboard Stats - faster queries with better caching
+  // OPTIMIZED: Get dashboard statistics using single database function
   async getDashboardStats(
     userId: string
   ): Promise<ApiResponse<DashboardStats>> {
     try {
-      // Parallel queries with optimized selects and limits
-      const [
-        quizzesResult,
-        examsResult,
-        flashcardsResult,
-        answersResult,
-        studyStreakResult,
-      ] = await Promise.all([
-        // Count queries are fast
-        supabase
-          .from(TABLE_NAMES.QUIZZES)
-          .select("quiz_id", { count: "exact" })
-          .eq("user_id", userId),
-        supabase
-          .from(TABLE_NAMES.EXAMS)
-          .select("exam_id", { count: "exact" })
-          .eq("user_id", userId),
-        supabase
-          .from(TABLE_NAMES.FLASHCARDS)
-          .select("flashcard_id", { count: "exact" })
-          .eq("user_id", userId),
-        // OPTIMIZED: Only get recent answers for average calculation (last 100)
-        supabase
-          .from(TABLE_NAMES.USER_ANSWERS)
-          .select("answer_id, is_correct")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(100), // Limit for performance
-        // Run study streak calculation in parallel
-        this.calculateStudyStreak(userId),
-      ]);
-
-      const totalQuizzes = quizzesResult.count || 0;
-      const totalExams = examsResult.count || 0;
-      const totalFlashcards = flashcardsResult.count || 0;
-
-      const answers = answersResult.data || [];
-      const questionsAnswered = answers.length;
-      const correctAnswers = answers.filter((a) => a.is_correct).length;
-      const averageScore =
-        questionsAnswered > 0 ? (correctAnswers / questionsAnswered) * 100 : 0;
-
-      return handleSuccess({
-        totalQuizzes,
-        totalExams,
-        totalFlashcards,
-        averageScore: Math.round(averageScore),
-        studyStreak: studyStreakResult.data || 0,
-        questionsAnswered,
-        correctAnswers,
-      });
-    } catch (error) {
-      return handleError(error);
-    }
-  },
-
-  // Calculate study streak - OPTIMIZED to limit data and use database aggregation
-  async calculateStudyStreak(userId: string): Promise<ApiResponse<number>> {
-    try {
-      // Only get last 30 days of data for performance
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
       const { data, error } = await supabase
-        .from(TABLE_NAMES.USER_ANSWERS)
-        .select("created_at")
-        .eq("user_id", userId)
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .order("created_at", { ascending: false })
-        .limit(100); // Limit to recent 100 answers for performance
+        .rpc('get_user_dashboard_stats', { p_user_id: userId });
 
       if (error) return handleError(error);
-
+      
       if (!data || data.length === 0) {
-        return handleSuccess(0);
+        // Return default stats if no data
+        return handleSuccess({
+          totalQuizzes: 0,
+          totalExams: 0,
+          totalFlashcards: 0,
+          averageScore: 0,
+          studyStreak: 0,
+          questionsAnswered: 0,
+          correctAnswers: 0,
+        });
       }
 
-      // Group by date and calculate consecutive days (optimized)
-      const uniqueDates = new Set<string>();
-      data.forEach((answer) => {
-        uniqueDates.add(new Date(answer.created_at).toDateString());
+      const stats = data[0];
+      return handleSuccess({
+        totalQuizzes: stats.total_quizzes,
+        totalExams: stats.total_exams,
+        totalFlashcards: stats.total_flashcards,
+        averageScore: Math.round(stats.average_score),
+        studyStreak: stats.study_streak,
+        questionsAnswered: stats.questions_answered,
+        correctAnswers: stats.correct_answers,
       });
-
-      const sortedDates = Array.from(uniqueDates).sort(
-        (a, b) => new Date(b).getTime() - new Date(a).getTime()
-      );
-
-      let streak = 0;
-      const today = new Date();
-
-      for (let i = 0; i < sortedDates.length; i++) {
-        const currentDate = new Date(sortedDates[i]);
-        const expectedDate = new Date(today);
-        expectedDate.setDate(expectedDate.getDate() - i);
-
-        if (currentDate.toDateString() === expectedDate.toDateString()) {
-          streak++;
-        } else {
-          break;
-        }
-      }
-
-      return handleSuccess(streak);
     } catch (error) {
       return handleError(error);
     }
   },
 
-  // Get recent activity - OPTIMIZED with parallel queries and reduced data
+  // DEPRECATED: Keep for backward compatibility but use optimized version above
+  async calculateStudyStreak(userId: string): Promise<ApiResponse<number>> {
+    // This is now calculated within get_user_dashboard_stats for better performance
+    const statsResult = await this.getDashboardStats(userId);
+    if (statsResult.success && statsResult.data) {
+      return handleSuccess(statsResult.data.studyStreak);
+    }
+    return handleSuccess(0);
+  },
+
+  // OPTIMIZED: Get recent activity using single database function
   async getRecentActivity(
     userId: string,
     limit: number = 10
   ): Promise<ApiResponse<RecentActivity[]>> {
     try {
-      // Run all queries in parallel for better performance
-      const [
-        quizCreationResult,
-        quizAnswerResult,
-        examCreationResult,
-        examSessionResult,
-        flashcardResult,
-      ] = await Promise.all([
-        // Recent quiz creation - limited data
-        supabase
-          .from(TABLE_NAMES.QUIZZES)
-          .select("quiz_id, title, created_at, topics(name)")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(Math.min(limit, 5)), // Reduce limit for faster queries
-
-        // Recent quiz attempts - limited data
-        supabase
-          .from(TABLE_NAMES.USER_ANSWERS)
-          .select(
-            "created_at, is_correct, quizzes(quiz_id, title, topics(name))"
-          )
-          .eq("user_id", userId)
-          .not("quiz_id", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(Math.min(limit, 5)),
-
-        // Recent exam creation - limited data
-        supabase
-          .from(TABLE_NAMES.EXAMS)
-          .select("exam_id, title, created_at, topics(name)")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(Math.min(limit, 3)),
-
-        // Recent exam sessions - limited data
-        supabase
-          .from(TABLE_NAMES.EXAM_SESSIONS)
-          .select(
-            "start_time, total_score, status, exams(exam_id, title, topics(name))"
-          )
-          .eq("user_id", userId)
-          .in("status", ["completed", "in_progress"])
-          .order("start_time", { ascending: false })
-          .limit(Math.min(limit, 3)),
-
-        // Recent flashcard creation - limited data
-        supabase
-          .from(TABLE_NAMES.FLASHCARDS)
-          .select("flashcard_id, question, created_at, topics(name)")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(Math.min(limit, 3)),
-      ]);
-
-      // Check for errors
-      const errors = [
-        quizCreationResult.error,
-        quizAnswerResult.error,
-        examCreationResult.error,
-        examSessionResult.error,
-        flashcardResult.error,
-      ].filter(Boolean);
-
-      if (errors.length > 0) {
-        return handleError(errors[0]);
-      }
-
-      // Extract data
-      const quizCreationData = quizCreationResult.data;
-      const quizAnswerData = quizAnswerResult.data;
-      const examCreationData = examCreationResult.data;
-      const examSessionData = examSessionResult.data;
-      const flashcardData = flashcardResult.data;
-
-      const activities: RecentActivity[] = [];
-
-      // Process quiz creation data
-      if (quizCreationData) {
-        quizCreationData.forEach((quiz) => {
-          const topics = Array.isArray(quiz.topics)
-            ? quiz.topics[0]
-            : quiz.topics;
-
-          activities.push({
-            id: `quiz-created-${quiz.quiz_id}`,
-            type: "quiz",
-            title: `Created: ${quiz.title}`,
-            completed_at: quiz.created_at,
-            topic: topics?.name,
-          });
+      const { data, error } = await supabase
+        .rpc('get_user_recent_activity', { 
+          p_user_id: userId,
+          p_limit: limit 
         });
-      }
 
-      // Process quiz answer data (quiz attempts)
-      if (quizAnswerData) {
-        interface QuizGroup {
-          quiz: {
-            quiz_id: string;
-            title: string;
-            topics?: { name: string };
-          };
-          answers: Array<{ is_correct: boolean }>;
-          latest: string;
-        }
+      if (error) return handleError(error);
+      
+      const activities: RecentActivity[] = (data || []).map((item: any) => ({
+        id: item.activity_id,
+        type: item.activity_type,
+        title: item.title,
+        score: item.score,
+        completed_at: item.completed_at,
+        topic: item.topic_name,
+      }));
 
-        const quizGroups = quizAnswerData.reduce(
-          (acc: Record<string, QuizGroup>, answer: any) => {
-            const quiz = Array.isArray(answer.quizzes)
-              ? answer.quizzes[0]
-              : answer.quizzes;
-            const quizId = quiz?.quiz_id;
-            if (!quizId) return acc;
-
-            if (!acc[quizId]) {
-              const topics = Array.isArray(quiz.topics)
-                ? quiz.topics[0]
-                : quiz.topics;
-              acc[quizId] = {
-                quiz: {
-                  quiz_id: quiz.quiz_id,
-                  title: quiz.title,
-                  topics: topics,
-                },
-                answers: [],
-                latest: answer.created_at,
-              };
-            }
-            acc[quizId].answers.push(answer);
-            return acc;
-          },
-          {}
-        );
-
-        Object.values(quizGroups).forEach((group: QuizGroup) => {
-          const correctCount = group.answers.filter(
-            (a: any) => a.is_correct
-          ).length;
-          const totalCount = group.answers.length;
-          const score =
-            totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
-
-          activities.push({
-            id: `quiz-attempt-${group.quiz.quiz_id}`,
-            type: "quiz",
-            title: `Attempted: ${group.quiz.title}`,
-            score,
-            completed_at: group.latest,
-            topic: group.quiz.topics?.name,
-          });
-        });
-      }
-
-      // Process exam creation data
-      if (examCreationData) {
-        examCreationData.forEach((exam) => {
-          const topics = Array.isArray(exam.topics)
-            ? exam.topics[0]
-            : exam.topics;
-
-          activities.push({
-            id: `exam-created-${exam.exam_id}`,
-            type: "exam",
-            title: `Created: ${exam.title}`,
-            completed_at: exam.created_at,
-            topic: topics?.name,
-          });
-        });
-      }
-
-      // Process exam session data
-      if (examSessionData) {
-        examSessionData.forEach((session) => {
-          const exam = Array.isArray(session.exams)
-            ? session.exams[0]
-            : session.exams;
-          const topics = Array.isArray(exam.topics)
-            ? exam.topics[0]
-            : exam.topics;
-
-          const statusText =
-            session.status === "completed" ? "Completed" : "Started";
-
-          activities.push({
-            id: `exam-session-${exam.exam_id}-${session.start_time}`,
-            type: "exam",
-            title: `${statusText}: ${exam.title}`,
-            score:
-              session.status === "completed"
-                ? session.total_score || 0
-                : undefined,
-            completed_at: session.start_time,
-            topic: topics?.name,
-          });
-        });
-      }
-
-      // Process flashcard creation data
-      if (flashcardData) {
-        flashcardData.forEach((flashcard) => {
-          const topics = Array.isArray(flashcard.topics)
-            ? flashcard.topics[0]
-            : flashcard.topics;
-
-          activities.push({
-            id: `flashcard-created-${flashcard.flashcard_id}`,
-            type: "flashcard",
-            title: `Created: ${flashcard.question.substring(0, 50)}${flashcard.question.length > 50 ? "..." : ""}`,
-            completed_at: flashcard.created_at,
-            topic: topics?.name,
-          });
-        });
-      }
-
-      // Sort by date and limit
-      activities.sort(
-        (a, b) =>
-          new Date(b.completed_at).getTime() -
-          new Date(a.completed_at).getTime()
-      );
-
-      return handleSuccess(activities.slice(0, limit));
+      return handleSuccess(activities);
     } catch (error) {
       return handleError(error);
     }
   },
 
-  // Get topic progress
+  // OPTIMIZED: Get topic progress using single database function
   async getTopicProgress(
     userId: string
   ): Promise<ApiResponse<TopicProgress[]>> {
     try {
       const { data, error } = await supabase
-        .from(TABLE_NAMES.USER_TOPIC_PROGRESS)
-        .select(
-          `
-          *,
-          topics(name)
-        `
-        )
-        .eq("user_id", userId)
-        .order("last_activity", { ascending: false });
+        .rpc('get_user_topic_progress', { p_user_id: userId });
 
       if (error) return handleError(error);
 
-      const progress: TopicProgress[] = (data || []).map((item) => ({
+      const progress: TopicProgress[] = (data || []).map((item: any) => ({
         topic_id: item.topic_id,
-        topic_name: item.topics?.name || "Unknown Topic",
-        progress_percentage: Math.round(
-          (item.questions_correct / Math.max(item.questions_attempted, 1)) * 100
-        ),
+        topic_name: item.topic_name,
+        progress_percentage: item.progress_percentage,
         questions_attempted: item.questions_attempted,
         questions_correct: item.questions_correct,
         last_activity: item.last_activity,

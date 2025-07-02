@@ -8,7 +8,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Disable verbose auth logging in all environments
+    debug: false,
   },
+  // Reduce overall client logging
+  global: {
+    headers: {
+      'X-Client-Info': 'examcraft-frontend'
+    }
+  }
 });
 
 // Import types from centralized database types

@@ -6,7 +6,11 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { useCurrentUser, useQuizWithQuestions } from "@/hooks/useDatabase";
+import {
+  useCurrentUser,
+  useQuizWithQuestions,
+  usePrefetchQuizPages,
+} from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -42,8 +46,19 @@ export default function TakeQuizPage() {
   const router = useRouter();
   const params = useParams();
   const quizId = params.quizId as string;
-  const { user } = useAuth();
-  const { data: currentUser } = useCurrentUser();
+  const { user, loading } = useAuth();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const { prefetchQuizReview } = usePrefetchQuizPages();
+
+  // FIXED: Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/");
+    }
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
+
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
 
   // OPTIMIZED: Removed debug logging for performance
   const { data: quiz, isLoading } = useQuizWithQuestions(quizId);
@@ -86,21 +101,21 @@ export default function TakeQuizPage() {
     };
   }, [quiz?.quiz_questions, currentQuestionIndex, userAnswers]);
 
-  // OPTIMIZED: Timer with reduced update frequency
+  // OPTIMIZED: Timer with reduced update frequency and memoized callback
+  const updateTimer = useCallback(() => {
+    if (!quizStartTime) return;
+    const newTimeElapsed = Math.floor(
+      (Date.now() - quizStartTime.getTime()) / 1000
+    );
+    setTimeElapsed((prev) => (prev !== newTimeElapsed ? newTimeElapsed : prev));
+  }, [quizStartTime]);
+
   useEffect(() => {
     if (!quizStartTime) return;
 
-    const timer = setInterval(() => {
-      const newTimeElapsed = Math.floor(
-        (Date.now() - quizStartTime.getTime()) / 1000
-      );
-      setTimeElapsed((prev) =>
-        prev !== newTimeElapsed ? newTimeElapsed : prev
-      );
-    }, 1000);
-
+    const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [quizStartTime]);
+  }, [updateTimer]);
 
   // Initialize quiz
   useEffect(() => {
@@ -232,13 +247,31 @@ export default function TakeQuizPage() {
     }
   };
 
-  if (isLoading) {
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
+  const isDataLoading = isLoading;
+
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto mb-4" />
-            <p className="text-gray-400">Loading quiz...</p>
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz...
+            </h2>
+            <p className="text-gray-400">Preparing your quiz questions</p>
           </div>
         </div>
       </DashboardLayout>
@@ -273,64 +306,71 @@ export default function TakeQuizPage() {
   if (quizResult) {
     return (
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto p-6 space-y-8">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-6"
+            className="text-center space-y-4 sm:space-y-6"
           >
             <div className="flex items-center justify-center space-x-3">
-              <Trophy className="h-12 w-12 text-yellow-500" />
-              <h1 className="text-3xl font-bold text-white">Quiz Completed!</h1>
+              <Trophy className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500" />
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">
+                Quiz Completed!
+              </h1>
             </div>
 
-            <Card className="bg-gray-800/50 border-gray-700/50 p-8">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-green-400">
+                  <div className="text-2xl sm:text-3xl font-bold text-green-400">
                     {quizResult.percentage}%
                   </div>
-                  <div className="text-gray-400">Score</div>
+                  <div className="text-gray-400 text-sm">Score</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-400">
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-400">
                     {quizResult.correct_answers}
                   </div>
-                  <div className="text-gray-400">Correct</div>
+                  <div className="text-gray-400 text-sm">Correct</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-purple-400">
+                  <div className="text-2xl sm:text-3xl font-bold text-purple-400">
                     {quizResult.total_questions}
                   </div>
-                  <div className="text-gray-400">Total</div>
+                  <div className="text-gray-400 text-sm">Total</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-400">
+                  <div className="text-2xl sm:text-3xl font-bold text-orange-400">
                     {quizResult.time_taken}
                   </div>
-                  <div className="text-gray-400">Time</div>
+                  <div className="text-gray-400 text-sm">Time</div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <Button
-                  onClick={() => router.push(`/quiz/review/${quizId}`)}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                >
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Review Quiz & Explanations
-                </Button>
-                <Button
-                  onClick={() => router.push("/dashboard")}
-                  variant="outline"
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700/50"
-                >
-                  Return to Dashboard
-                </Button>
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button
+                    onClick={() => router.push(`/quiz/review/${quizId}`)}
+                    onMouseEnter={() =>
+                      prefetchQuizReview(quizId, currentUser?.user_id || "")
+                    }
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-3 font-medium"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    View Detailed Review
+                  </Button>
+                  <Button
+                    onClick={() => router.push("/dashboard")}
+                    variant="outline"
+                    className="border-gray-600 text-gray-300 hover:bg-gray-700/50 px-6 py-3"
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
                 <Button
                   onClick={() => router.push("/quiz/create")}
                   variant="outline"
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700/50 min-h-[48px]"
                 >
                   Create Another Quiz
                 </Button>
@@ -345,29 +385,35 @@ export default function TakeQuizPage() {
   // Quiz Taking View
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Quiz Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
           <div className="flex items-center space-x-3">
             <Button
               onClick={() => router.push("/dashboard")}
               variant="outline"
               size="icon"
-              className="border-gray-600 text-gray-400 hover:bg-gray-700/50"
+              className="border-gray-600 text-gray-400 hover:bg-gray-700/50 flex-shrink-0"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-white">{quiz.title}</h1>
-              <p className="text-gray-400">{quiz.description}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-white truncate">
+                {quiz.title}
+              </h1>
+              <p className="text-gray-400 text-sm sm:text-base truncate">
+                {quiz.description}
+              </p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center justify-between sm:justify-end space-x-4">
             <div className="flex items-center space-x-2 text-gray-300">
               <Clock className="h-4 w-4" />
-              <span>{formatTime(timeElapsed)}</span>
+              <span className="text-sm sm:text-base">
+                {formatTime(timeElapsed)}
+              </span>
             </div>
-            <div className="text-gray-300">
+            <div className="text-gray-300 text-sm sm:text-base">
               {currentQuestionIndex + 1} / {questions.length}
             </div>
           </div>
@@ -388,19 +434,19 @@ export default function TakeQuizPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
         >
-          <Card className="bg-gray-800/50 border-gray-700/50 p-8">
-            <div className="space-y-6">
+          <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8">
+            <div className="space-y-4 sm:space-y-6">
               {/* Question */}
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
                     <BookOpen className="h-4 w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Question {currentQuestionIndex + 1}
                   </h2>
                 </div>
-                <p className="text-lg text-gray-200 leading-relaxed">
+                <p className="text-base sm:text-lg text-gray-200 leading-relaxed">
                   {currentQuestion?.content}
                 </p>
               </div>
@@ -409,7 +455,9 @@ export default function TakeQuizPage() {
               <div className="space-y-3">
                 {currentQuestion?.question_type === "fill-in-blank" ? (
                   <div className="space-y-2">
-                    <label className="text-gray-300">Your Answer:</label>
+                    <label className="text-gray-300 text-sm sm:text-base">
+                      Your Answer:
+                    </label>
                     <input
                       type="text"
                       value={
@@ -418,7 +466,7 @@ export default function TakeQuizPage() {
                       }
                       onChange={(e) => handleAnswerSelect("", e.target.value)}
                       placeholder="Type your answer here..."
-                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400"
+                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 min-h-[48px]"
                     />
                   </div>
                 ) : (
@@ -430,7 +478,7 @@ export default function TakeQuizPage() {
                       <button
                         key={option.option_id}
                         onClick={() => handleAnswerSelect(option.option_id)}
-                        className={`w-full p-4 text-left rounded-lg border transition-all ${
+                        className={`w-full p-3 sm:p-4 text-left rounded-lg border transition-all min-h-[56px] ${
                           isSelected
                             ? "border-purple-500 bg-purple-500/20 text-purple-300"
                             : "border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500 hover:bg-gray-700/70"
@@ -438,17 +486,19 @@ export default function TakeQuizPage() {
                       >
                         <div className="flex items-center space-x-3">
                           <div
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                            className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                               isSelected
                                 ? "border-purple-500 bg-purple-500"
                                 : "border-gray-500"
                             }`}
                           >
                             {isSelected && (
-                              <CheckCircle className="h-4 w-4 text-white" />
+                              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                             )}
                           </div>
-                          <span>{option.content}</span>
+                          <span className="text-sm sm:text-base">
+                            {option.content}
+                          </span>
                         </div>
                       </button>
                     );
@@ -460,18 +510,18 @@ export default function TakeQuizPage() {
         </motion.div>
 
         {/* Navigation */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
           <Button
             onClick={handlePreviousQuestion}
             disabled={currentQuestionIndex === 0}
             variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-700/50 disabled:opacity-50"
+            className="border-gray-600 text-gray-300 hover:bg-gray-700/50 disabled:opacity-50 w-full sm:w-auto min-h-[48px]"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Previous
           </Button>
 
-          <div className="flex space-x-2">
+          <div className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-2 sm:pb-0">
             {questions.map((question, index) => {
               const isAnswered = userAnswers.has(question?.question_id || "");
               const isCurrent = index === currentQuestionIndex;
@@ -480,7 +530,7 @@ export default function TakeQuizPage() {
                 <button
                   key={index}
                   onClick={() => setCurrentQuestionIndex(index)}
-                  className={`w-8 h-8 rounded-full text-sm transition-all ${
+                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full text-sm transition-all flex-shrink-0 ${
                     isCurrent
                       ? "bg-purple-500 text-white"
                       : isAnswered
@@ -498,7 +548,7 @@ export default function TakeQuizPage() {
             <Button
               onClick={handleSubmitQuiz}
               disabled={isSubmitting || !hasAnsweredCurrent}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50"
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 w-full sm:w-auto min-h-[48px]"
             >
               {isSubmitting ? (
                 <>
@@ -516,7 +566,7 @@ export default function TakeQuizPage() {
             <Button
               onClick={handleNextQuestion}
               disabled={!hasAnsweredCurrent}
-              className="bg-purple-500 hover:bg-purple-600 disabled:opacity-50"
+              className="bg-purple-500 hover:bg-purple-600 disabled:opacity-50 w-full sm:w-auto min-h-[48px]"
             >
               Next
               <ArrowRight className="h-4 w-4 ml-2" />

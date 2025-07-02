@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,10 @@ import {
   useTopics,
   useCurrentUser,
   useInvalidateUserData,
+  useCreateQuiz,
+  usePrefetchQuizPages,
 } from "@/hooks/useDatabase";
 import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardStats, RecentActivity, Quiz } from "@/types/database";
 import {
   Brain,
   Loader2,
@@ -42,12 +42,14 @@ interface QuizGenerationForm {
 
 export default function CreateQuizPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { data: currentUser } = useCurrentUser();
-  const { data: topics } = useTopics();
+  const { user, loading } = useAuth();
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const { data: topics = [], isLoading: topicsLoading } = useTopics();
   const invalidateUserData = useInvalidateUserData();
-  const queryClient = useQueryClient();
+  const { mutate: createQuiz } = useCreateQuiz();
+  const { prefetchQuizTake } = usePrefetchQuizPages();
 
+  // All useState hooks must be at the top, before any conditional logic
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedQuiz, setGeneratedQuiz] = useState<{
     quiz_id: string;
@@ -65,22 +67,15 @@ export default function CreateQuizPage() {
     additional_instructions: "",
   });
 
-  const difficultyLevels = [
-    { value: 1, label: "Beginner", color: "text-green-400" },
-    { value: 2, label: "Easy", color: "text-blue-400" },
-    { value: 3, label: "Medium", color: "text-yellow-400" },
-    { value: 4, label: "Hard", color: "text-orange-400" },
-    { value: 5, label: "Expert", color: "text-red-400" },
-  ];
+  // All useCallback hooks must also be at the top
+  const handleInputChange = useCallback(
+    (field: keyof QuizGenerationForm, value: string | number | string[]) => {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
-  const handleInputChange = (
-    field: keyof QuizGenerationForm,
-    value: string | number | string[]
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     if (!form.title.trim()) {
       toast.error("Quiz title is required");
       return false;
@@ -94,7 +89,60 @@ export default function CreateQuizPage() {
       return false;
     }
     return true;
-  };
+  }, [form.title, form.topic_id, form.custom_topic, form.num_questions]);
+
+  // FIXED: Redirect to landing page if not authenticated and not loading
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/");
+    }
+  }, [loading, user]); // Removed router from dependencies to prevent unnecessary re-runs
+
+  // OPTIMIZED: Memoize loading states to prevent unnecessary recalculations
+  const { isAuthLoading, isDataLoading, showLoadingScreen } = useMemo(() => {
+    const authLoading =
+      loading ||
+      (loading === false && user && userLoading) ||
+      (loading === false && user && !currentUser);
+    const dataLoading = topicsLoading && !topics; // Only show loading if no cached topics data
+
+    return {
+      isAuthLoading: authLoading,
+      isDataLoading: dataLoading,
+      showLoadingScreen: authLoading || dataLoading,
+    };
+  }, [loading, user, userLoading, currentUser, topicsLoading, topics]);
+
+  if (showLoadingScreen) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-2xl blur-xl"></div>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+              Loading Quiz Creator...
+            </h2>
+            <p className="text-gray-400">
+              Preparing your AI-powered quiz generator
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const difficultyLevels = [
+    { value: 1, label: "Beginner", color: "text-green-400" },
+    { value: 2, label: "Easy", color: "text-blue-400" },
+    { value: 3, label: "Medium", color: "text-yellow-400" },
+    { value: 4, label: "Hard", color: "text-orange-400" },
+    { value: 5, label: "Expert", color: "text-red-400" },
+  ];
 
   const handleGenerateQuiz = async () => {
     if (!validateForm() || !currentUser) return;
@@ -122,64 +170,8 @@ export default function CreateQuizPage() {
 
       toast.success("Quiz generated successfully!");
 
-      // Immediately update cache with optimistic data for instant UI updates
+      // Simple background data refresh - much faster than complex cache updates
       if (currentUser?.user_id) {
-        console.log("Quiz created: Updating cache optimistically", {
-          userId: currentUser.user_id,
-        });
-
-        // Update dashboard stats immediately
-        queryClient.setQueryData(
-          ["dashboardStats", currentUser.user_id],
-          (oldData: DashboardStats | undefined) => {
-            if (oldData) {
-              return {
-                ...oldData,
-                totalQuizzes: (oldData.totalQuizzes || 0) + 1,
-              };
-            }
-            return oldData;
-          }
-        );
-
-        // Update user quizzes list immediately
-        queryClient.setQueryData(
-          ["userQuizzes", currentUser.user_id],
-          (oldData: Quiz[] | undefined) => {
-            if (oldData) {
-              const newQuiz: Quiz = {
-                quiz_id: result.quiz.quiz_id,
-                title: result.quiz.title,
-                description: result.quiz.description,
-                topic_id: result.quiz.topic_id,
-                user_id: currentUser.user_id,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-              return [newQuiz, ...oldData];
-            }
-            return oldData;
-          }
-        );
-
-        // Update recent activity immediately
-        queryClient.setQueryData(
-          ["recentActivity", currentUser.user_id],
-          (oldData: RecentActivity[] | undefined) => {
-            if (oldData) {
-              const newActivity: RecentActivity = {
-                id: `temp-${Date.now()}`,
-                type: "quiz",
-                title: `Created quiz: ${result.quiz.title}`,
-                completed_at: new Date().toISOString(),
-              };
-              return [newActivity, ...oldData.slice(0, 9)]; // Keep only 10 items
-            }
-            return oldData;
-          }
-        );
-
-        // Also invalidate for background refresh to ensure data consistency
         invalidateUserData(currentUser.user_id);
       }
 
@@ -202,35 +194,35 @@ export default function CreateQuizPage() {
   if (generatedQuiz) {
     return (
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto p-20 space-y-8">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-20 space-y-6 sm:space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8"
+            className="text-center space-y-6 sm:space-y-8"
           >
             {/* Success Header */}
             <div className="space-y-4">
               <div className="flex items-center justify-center space-x-3">
-                <div className="h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
-                  <Sparkles className="h-8 w-8 text-white" />
+                <div className="h-12 w-12 sm:h-16 sm:w-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
+                  <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
               </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
                 Quiz Generated Successfully!
               </h1>
-              <p className="text-gray-400 max-w-2xl mx-auto">
+              <p className="text-gray-400 max-w-2xl mx-auto text-sm sm:text-base px-4">
                 Your AI-powered quiz has been created and is ready to take.
               </p>
             </div>
 
             {/* Quiz Details Card */}
-            <Card className="bg-gray-800/50 border-gray-700/50 p-8 max-w-2xl mx-auto">
-              <div className="space-y-6">
+            <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="text-center space-y-3">
-                  <h2 className="text-2xl font-bold text-white">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">
                     {generatedQuiz.title}
                   </h2>
-                  <div className="flex items-center justify-center space-x-6 text-gray-400">
+                  <div className="flex items-center justify-center space-x-4 sm:space-x-6 text-gray-400 text-sm sm:text-base">
                     <div className="flex items-center space-x-2">
                       <FileText className="h-4 w-4" />
                       <span>{generatedQuiz.num_questions} Questions</span>
@@ -246,17 +238,18 @@ export default function CreateQuizPage() {
 
                 {/* Action Buttons */}
                 <div className="space-y-4">
-                  <Button
-                    onClick={() =>
-                      router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
-                    }
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-3 text-lg"
-                  >
-                    <Zap className="h-5 w-5 mr-2" />
-                    Start Quiz Now
-                  </Button>
-
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                    <Button
+                      onClick={() =>
+                        router.push(`/quiz/take/${generatedQuiz.quiz_id}`)
+                      }
+                      onMouseEnter={() =>
+                        prefetchQuizTake(generatedQuiz.quiz_id)
+                      }
+                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-6 py-3 font-medium shadow-lg hover:shadow-green-500/25 transition-all duration-200"
+                    >
+                      Take Quiz Now
+                    </Button>
                     <Button
                       onClick={() => {
                         if (currentUser?.user_id) {
@@ -265,33 +258,33 @@ export default function CreateQuizPage() {
                         router.push("/dashboard");
                       }}
                       variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50 px-6 py-3"
                     >
                       <Users className="h-4 w-4 mr-2" />
                       Return to Dashboard
                     </Button>
-
-                    <Button
-                      onClick={() => {
-                        setGeneratedQuiz(null);
-                        setForm({
-                          title: "",
-                          description: "",
-                          topic_id: "",
-                          custom_topic: "",
-                          difficulty: 3,
-                          num_questions: 10,
-                          content_source: "",
-                          additional_instructions: "",
-                        });
-                      }}
-                      variant="outline"
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
-                    >
-                      <Brain className="h-4 w-4 mr-2" />
-                      Create Another Quiz
-                    </Button>
                   </div>
+
+                  <Button
+                    onClick={() => {
+                      setGeneratedQuiz(null);
+                      setForm({
+                        title: "",
+                        description: "",
+                        topic_id: "",
+                        custom_topic: "",
+                        difficulty: 3,
+                        num_questions: 10,
+                        content_source: "",
+                        additional_instructions: "",
+                      });
+                    }}
+                    variant="outline"
+                    className="border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Create Another Quiz
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -303,7 +296,7 @@ export default function CreateQuizPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-20 space-y-8">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-20 space-y-6 sm:space-y-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -311,14 +304,14 @@ export default function CreateQuizPage() {
           className="text-center space-y-4"
         >
           <div className="flex items-center justify-center space-x-3">
-            <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
-              <Brain className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+              <Brain className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
               AI Quiz Generator
             </h1>
           </div>
-          <p className="text-gray-400 max-w-2xl mx-auto">
+          <p className="text-gray-400 max-w-2xl mx-auto text-sm sm:text-base px-4">
             Create personalized multiple-choice quizzes with AI. Provide your
             topic and content, and our AI will generate engaging MCQ questions
             tailored to your needs.
@@ -331,20 +324,20 @@ export default function CreateQuizPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="bg-gray-800/50 border-gray-700/50 p-8">
-            <div className="space-y-8">
+          <Card className="bg-gray-800/50 border-gray-700/50 p-4 sm:p-6 lg:p-8">
+            <div className="space-y-6 sm:space-y-8">
               {/* Basic Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                    <BookOpen className="h-4 w-4 text-white" />
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center space-x-3 mb-4 sm:mb-6">
+                  <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                    <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Basic Information
                   </h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="title" className="text-gray-300">
                       Quiz Title
@@ -379,7 +372,7 @@ export default function CreateQuizPage() {
                 {/* Topic Selection */}
                 <div className="space-y-4">
                   <Label className="text-gray-300">Topic</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="topic" className="text-sm text-gray-400">
                         Select from existing topics
@@ -390,7 +383,7 @@ export default function CreateQuizPage() {
                         onChange={(e) =>
                           handleInputChange("topic_id", e.target.value)
                         }
-                        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white"
+                        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm sm:text-base"
                       >
                         <option value="">Choose a topic...</option>
                         {topics?.map((topic) => (
@@ -437,14 +430,14 @@ export default function CreateQuizPage() {
                   {/* Difficulty Level */}
                   <div className="space-y-4">
                     <Label className="text-gray-300">Difficulty Level</Label>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                       {difficultyLevels.map((level) => (
                         <button
                           key={level.value}
                           onClick={() =>
                             handleInputChange("difficulty", level.value)
                           }
-                          className={`p-3 rounded-lg border text-center transition-all ${
+                          className={`p-2 sm:p-3 rounded-lg border text-center transition-all ${
                             form.difficulty === level.value
                               ? "border-purple-500 bg-purple-500/20 text-purple-300"
                               : "border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500"
@@ -478,19 +471,19 @@ export default function CreateQuizPage() {
                           parseInt(e.target.value)
                         )
                       }
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-gray-700/50 border-gray-600 text-white text-sm sm:text-base"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Content Source */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-white" />
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center space-x-3 mb-4 sm:mb-6">
+                  <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                    <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-bold text-white">
                     Content & Instructions
                   </h2>
                 </div>
@@ -508,7 +501,7 @@ export default function CreateQuizPage() {
                       }
                       placeholder="Paste your study material, notes, or content that you want the quiz to be based on..."
                       rows={6}
-                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical"
+                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder:text-gray-400 resize-vertical text-sm sm:text-base"
                     />
                   </div>
 
@@ -537,20 +530,25 @@ export default function CreateQuizPage() {
               </div>
 
               {/* Generate Button */}
-              <div className="pt-6 border-t border-gray-700">
+              <div className="pt-4 sm:pt-6 border-t border-gray-700">
                 <Button
                   onClick={handleGenerateQuiz}
-                  disabled={isGenerating}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isGenerating || userLoading || !currentUser}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium py-3 sm:py-4 px-4 sm:px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 >
                   {isGenerating ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-5 w-5 animate-spin" />
+                    <div className="flex items-center justify-center space-x-2">
+                      <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                       <span>Generating Quiz...</span>
                     </div>
+                  ) : userLoading ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                      <span>Loading...</span>
+                    </div>
                   ) : (
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="h-5 w-5" />
+                    <div className="flex items-center justify-center space-x-2">
+                      <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
                       <span>Generate AI Quiz</span>
                     </div>
                   )}
@@ -566,14 +564,16 @@ export default function CreateQuizPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 p-6">
-            <div className="flex items-start space-x-4">
-              <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <Zap className="h-4 w-4 text-white" />
+          <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 p-4 sm:p-6">
+            <div className="flex items-start space-x-3 sm:space-x-4">
+              <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold text-blue-300">Pro Tips</h3>
-                <ul className="text-sm text-gray-300 space-y-1">
+                <h3 className="text-base sm:text-lg font-bold text-blue-300">
+                  Pro Tips
+                </h3>
+                <ul className="text-xs sm:text-sm text-gray-300 space-y-1">
                   <li>
                     • Provide detailed content for more accurate questions
                   </li>

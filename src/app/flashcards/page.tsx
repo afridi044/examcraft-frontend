@@ -6,6 +6,7 @@ import {
   useUserFlashcards,
   useCurrentUser,
   useInvalidateUserData,
+  usePrefetchCreatePages,
 } from "@/hooks/useDatabase";
 import {
   Loader2,
@@ -24,9 +25,9 @@ import {
   Star,
   Trophy,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { FlashcardWithTopic, Topic } from "@/types/database";
 
 // Type for FlashCard props
@@ -176,7 +177,7 @@ const TopicCard = ({
   );
 };
 
-// OPTIMIZED: Flashcard component with reduced re-renders
+// OPTIMIZED: Flashcard component with reduced re-renders - MOVED OUTSIDE MAIN COMPONENT
 const FlashCard = ({ flashcard, index }: FlashCardProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -188,9 +189,9 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
   );
 
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
+  const handleFlip = useCallback(() => {
+    setIsFlipped((prev) => !prev);
+  }, []);
 
   return (
     <motion.div
@@ -359,13 +360,15 @@ const FlashCard = ({ flashcard, index }: FlashCardProps) => {
   );
 };
 
-export default function FlashcardsPage() {
+function FlashcardsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
-  // Get current user profile data to access database user_id
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const invalidateUserData = useInvalidateUserData();
+  const prefetchCreatePages = usePrefetchCreatePages();
 
-  // Use the database user_id instead of the Supabase auth user ID
+  // Get current user profile data to access database user_id
   const {
     data: flashcards,
     isLoading: isLoadingFlashcards,
@@ -375,19 +378,23 @@ export default function FlashcardsPage() {
   // State for topic selection (null = show topics, string = show flashcards for that topic)
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
-  const router = useRouter();
-
-  // Refresh data when flashcards page loads
+  // Redirect to landing page if not authenticated and not loading
   useEffect(() => {
-    if (currentUser?.user_id) {
-      console.log("Flashcards: Invalidating data on mount/navigation", {
-        userId: currentUser.user_id,
-      });
-      invalidateUserData(currentUser.user_id);
+    if (!loading && !user) {
+      router.push("/");
     }
-  }, [currentUser?.user_id, invalidateUserData]);
+  }, [loading, user, router]);
+
+  // Only invalidate data if it's stale or on explicit user action
+  // Removed automatic invalidation on mount for better performance
+  // Data will now update automatically due to improved query settings
 
   const handleCreateFlashcard = (topicId?: string) => {
+    // Prefetch create page data before navigation
+    prefetchCreatePages().catch((err) =>
+      console.warn("Create flashcard prefetch failed:", err)
+    );
+
     if (topicId) {
       router.push(`/flashcards/create?topic_id=${topicId}`);
     } else {
@@ -534,17 +541,34 @@ export default function FlashcardsPage() {
       }
     };
 
+    const handleFocus = () => {
+      if (currentUser?.user_id) {
+        // Window regained focus, refetch to get latest data
+        refetchFlashcards();
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [currentUser?.user_id, refetchFlashcards]);
 
   // FIXED: Proper loading state handling to prevent flickering
-  // Show loading state while auth user, database user, or flashcards are loading
-  const isLoading = loading || userLoading || !user || isLoadingFlashcards;
+  // Improved loading logic - don't show loading state when user is signing out
+  const isMainLoading =
+    loading ||
+    (loading === false && user && userLoading) ||
+    (loading === false && user && !currentUser);
+  const isDataLoading = currentUser?.user_id && isLoadingFlashcards;
 
-  if (isLoading) {
+  // Show full loading screen for both auth and initial data load, but not during sign out
+  const showFullLoadingScreen = isMainLoading || isDataLoading;
+
+  if (showFullLoadingScreen) {
     return (
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center mt-14 sm:mt-16 md:mt-20">
@@ -830,5 +854,31 @@ export default function FlashcardsPage() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function FlashcardsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="relative">
+                <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/50">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+              </div>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+                Loading Flashcards...
+              </h2>
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <FlashcardsPageContent />
+    </Suspense>
   );
 }

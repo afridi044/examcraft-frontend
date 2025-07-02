@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "cross-env NEXT_TELEMETRY_DISABLED=1 next dev --turbopack --port 3000",
+    "dev:fast": "cross-env NEXT_TELEMETRY_DISABLED=1 GENERATE_SOURCEMAP=false next dev --turbopack --port 3000",
+    "dev:regular": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -64,6 +66,7 @@
     "@types/node": "^20.17.50",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
     "prettier": "^3.5.3",

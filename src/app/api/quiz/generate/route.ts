@@ -180,7 +180,7 @@ async function generateQuestionsWithAI(
           "X-Title": "ExamCraft - AI Quiz Generator",
         },
         body: JSON.stringify({
-          model: "deepseek/deepseek-r1-0528-qwen3-8b:free", // Free model
+          model: "deepseek/deepseek-chat-v3-0324:free", // Free model
           messages: [
             {
               role: "system",
@@ -195,8 +195,8 @@ async function generateQuestionsWithAI(
           temperature: 0.7,
           max_tokens: 4000,
           // Performance optimizations
-          stream: false,
-          top_p: 0.9,
+          //stream: false,
+          //top_p: 0.9,
         }),
       }
     );
